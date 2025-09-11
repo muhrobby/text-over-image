@@ -1,4 +1,5 @@
 const axios = require("axios");
+const sharp = require("sharp");
 const imageService = require("../services/imageService");
 const { ApiResponse } = require("../utils/response");
 const { AppError } = require("../utils/errors");
@@ -20,12 +21,15 @@ class ImageController {
         imageBuffer,
         address
       );
+      const meta = await sharp(processedImage).metadata();
+      const outFormat = meta.format || "jpeg";
+      const ext = outFormat === "jpeg" ? "jpg" : outFormat;
 
       if (format === "json") {
         // Return as JSON with base64
         const base64 = processedImage.toString("base64");
         const response = new ApiResponse(true, "Image processed successfully", {
-          image: `data:image/jpeg;base64,${base64}`,
+          image: `data:image/${outFormat};base64,${base64}`,
           size: processedImage.length,
           originalSize: imageBuffer.length,
         });
@@ -34,9 +38,9 @@ class ImageController {
       } else {
         // Return as binary
         res.set({
-          "Content-Type": "image/jpeg",
+          "Content-Type": `image/${outFormat}`,
           "Content-Length": processedImage.length,
-          "Content-Disposition": 'inline; filename="watermarked-image.jpg"',
+          "Content-Disposition": `inline; filename="watermarked-image.${ext}"`,
           "X-Original-Size": imageBuffer.length,
           "X-Processed-Size": processedImage.length,
         });
@@ -87,6 +91,9 @@ class ImageController {
 
       // Process image with watermark
       const processedImage = await imageService.addWatermark(imageBuffer);
+      const meta = await sharp(processedImage).metadata();
+      const outFormat = meta.format || "jpeg";
+      const ext = outFormat === "jpeg" ? "jpg" : outFormat;
 
       if (format === "json") {
         // Return as JSON with base64
@@ -95,7 +102,7 @@ class ImageController {
           true,
           "Image processed successfully",
           {
-            image: `data:image/jpeg;base64,${base64}`,
+            image: `data:image/${outFormat};base64,${base64}`,
             size: processedImage.length,
             originalSize: imageBuffer.length,
             sourceUrl: url,
@@ -106,9 +113,9 @@ class ImageController {
       } else {
         // Return as binary
         res.set({
-          "Content-Type": "image/jpeg",
+          "Content-Type": `image/${outFormat}`,
           "Content-Length": processedImage.length,
-          "Content-Disposition": 'inline; filename="watermarked-image.jpg"',
+          "Content-Disposition": `inline; filename="watermarked-image.${ext}"`,
           "X-Original-Size": imageBuffer.length,
           "X-Processed-Size": processedImage.length,
           "X-Source-URL": url,
