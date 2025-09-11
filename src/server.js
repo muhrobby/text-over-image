@@ -5,8 +5,13 @@ const rateLimit = require("express-rate-limit");
 const config = require("./config/config");
 const routes = require("./routes");
 const { errorHandler, notFound } = require("./middleware/errorHandler");
+const morgan = require("morgan");
 
 const app = express();
+
+// Trust first proxy (required when behind reverse proxies like Codespaces/NGINX)
+// Ensures rate limiter and req.ip work with X-Forwarded-For
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet());
@@ -15,6 +20,8 @@ app.use(cors(config.cors));
 // Rate limiting
 const limiter = rateLimit(config.rateLimit);
 app.use(limiter);
+
+app.use(morgan('combined'));
 
 // Body parser
 app.use(express.json({ limit: config.upload.maxFileSize }));
