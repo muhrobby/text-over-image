@@ -1,6 +1,6 @@
 // services/ImageService.js (CommonJS)
 const sharp = require("sharp");
-const moment = require("moment");
+const moment = require("moment-timezone");
 const config = require("../config/config");
 const { AppError } = require("../utils/errors");
 
@@ -275,7 +275,7 @@ class ImageService {
       }
 
       // Generate timestamp + address
-      const timestamp = moment().format("DD MMM YYYY HH:mm:ss");
+      const timestamp = moment.tz("Asia/Jakarta").format("DD MMM YYYY HH:mm:ss");
       // const addressCfg = config?.watermark?.address || "Lokasi tidak tersedia";
       const address = addressReq || "Lokasi tidak tersedia";
 
@@ -334,7 +334,7 @@ class ImageService {
 
   // (Opsional) helper jika kamu masih butuh
   generateWatermarkText() {
-    const now = moment();
+    const now = moment.tz("Asia/Jakarta");
     const date = now.format("DD/MM/YYYY");
     const time = now.format("HH:mm:ss");
     const address = config?.watermark?.address || "Lokasi tidak tersedia";
