@@ -2,6 +2,7 @@
 const sharp = require("sharp");
 const moment = require("moment");
 const config = require("../config/config");
+const { AppError } = require("../utils/errors");
 
 // ===================== Utils: text measure & wrap =====================
 function estimateWidthPx(str, fontSize, avgFactor = 0.58) {
@@ -249,8 +250,8 @@ function buildWatermarkSVGAdvanced({
 class ImageService {
   /**
    * @param {Buffer} imageBuffer
-   * @param {Object} opts
-   * @param {string} [opts.address]  // override alamat dari config jika diisi
+   * @param {string} [addressReq] // alamat override (jika diisi)
+   * @param {Object} [opts]
    * @param {string} [opts.align]    // 'left' | 'right'
    * @param {number} [opts.panelWidthPct] // 0.6..0.8 (opsional)
    * @param {number} [opts.maxAddressLines] // default 3
@@ -263,18 +264,14 @@ class ImageService {
       const metadata = await image.metadata();
 
       if (!metadata || !metadata.width || !metadata.height) {
-        const e = new Error("Invalid image file");
-        e.status = 400;
-        throw e;
+        throw new AppError("Invalid image file", 400);
       }
 
       const { width, height, format } = metadata;
       const supportedFormats = new Set(["jpeg", "jpg", "png", "webp"]);
       const fmt = format === "jpg" ? "jpeg" : format;
       if (!supportedFormats.has(fmt)) {
-        const e = new Error("Unsupported image format");
-        e.status = 400;
-        throw e;
+        throw new AppError("Unsupported image format", 400);
       }
 
       // Generate timestamp + address
@@ -328,7 +325,10 @@ class ImageService {
       const processedImage = await pipeline.toBuffer();
       return processedImage;
     } catch (error) {
-      throw new Error(`Image processing failed: ${error.message}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError(`Image processing failed: ${error.message}`, 500);
     }
   }
 
