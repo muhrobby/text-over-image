@@ -65,6 +65,7 @@ class ImageController {
         responseType: "arraybuffer",
         timeout: config.axios.timeout,
         maxContentLength: config.axios.maxContentLength,
+        maxBodyLength: config.axios.maxBodyLength,
         headers: {
           "User-Agent": "Text-Over-Image-API/1.0",
         },

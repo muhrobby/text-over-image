@@ -6,6 +6,7 @@ const {
   validateUrlUpload,
 } = require("../middleware/validation");
 const config = require("../config/config");
+const { AppError } = require("../utils/errors");
 
 const router = express.Router();
 
@@ -20,7 +21,10 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(
-        new Error("Invalid file format. Only JPG, PNG, and WebP are allowed."),
+        new AppError(
+          "Invalid file format. Only JPG, PNG, and WebP are allowed.",
+          400
+        ),
         false
       );
     }

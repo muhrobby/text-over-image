@@ -1,5 +1,6 @@
 const Joi = require("joi");
 const { AppError } = require("../utils/errors");
+const config = require("../config/config");
 
 // Validation schemas
 const schemas = {
@@ -30,13 +31,12 @@ const validateFileUpload = (req, res, next) => {
     }
 
     // Validate file size (multer already checks this, but let's double-check)
-    if (req.file.size > 10 * 1024 * 1024) {
+    if (req.file.size > config.upload.maxFileSizeBytes) {
       throw new AppError("File too large. Maximum size is 10MB", 400);
     }
 
     // Validate file type
-    const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowedMimeTypes.includes(req.file.mimetype)) {
+    if (!config.upload.allowedMimeTypes.includes(req.file.mimetype)) {
       throw new AppError(
         "Invalid file format. Only JPG, PNG, and WebP are allowed",
         400
