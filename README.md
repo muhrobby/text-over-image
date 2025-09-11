@@ -1,95 +1,86 @@
 # Text Over Image API
 
-API untuk menambahkan watermark otomatis pada gambar dengan informasi tanggal, jam, dan alamat. API ini dibangun dengan Node.js dan Express.js menggunakan arsitektur modular.
+API untuk menambahkan watermark otomatis pada gambar dengan informasi tanggal, jam, dan alamat. Dibangun dengan Node.js + Express, memproses sepenuhnya di memori (tidak menyimpan file di server), dan menjaga resolusi asli.
 
 ## 🚀 Fitur Utama
 
 - ✅ Upload gambar dari file lokal dan URL
-- ✅ Watermark otomatis dengan tanggal, jam, dan alamat
-- ✅ Tidak menyimpan file di server (memory-only processing)
-- ✅ Mempertahankan kualitas/resolusi gambar original
-- ✅ Response binary atau JSON dengan base64
-- ✅ Rate limiting untuk keamanan
-- ✅ Support multiple format: JPG, PNG, WebP
-- ✅ File size limit 10MB
-- ✅ Font size dinamis berdasarkan resolusi gambar
-- ✅ Drop shadow untuk readability
+- ✅ Watermark otomatis dengan tanggal, jam (WIB), dan alamat
+- ✅ Memory-only processing (no disk I/O)
+- ✅ Tidak mengubah resolusi/format input
+- ✅ Response binary atau JSON (data URL base64)
+- ✅ Rate limiting (100 req/15 menit/IP)
+- ✅ Format: JPG, PNG, WebP (maks. 10MB)
+- ✅ Auto-wrap alamat (maks. 3 baris, elipsis)
+- ✅ Header respons: `X-Original-Size`, `X-Processed-Size`, `X-Source-URL` (untuk URL upload)
 
 ## 📦 Struktur Project
 
 ```
-text-over-image-api/
-├── config/
-│   └── config.js                 # Konfigurasi aplikasi
-├── controllers/
-│   └── imageController.js        # Controller untuk handling request
-├── services/
-│   └── imageService.js          # Business logic untuk image processing
-├── middleware/
-│   ├── errorHandler.js          # Error handling middleware
-│   └── validation.js            # Request validation
-├── routes/
-│   └── index.js                 # Route definitions
-├── utils/
-│   ├── response.js              # Response formatting utilities
-│   └── errors.js                # Custom error classes
-├── server.js                    # Entry point aplikasi
-├── package.json                 # Dependencies dan scripts
-├── .env.example                 # Environment variables example
-└── README.md                    # Dokumentasi
+text-over-image/
+├── src/
+│   ├── config/config.js
+│   ├── controllers/imageController.js
+│   ├── middleware/{errorHandler,validation}.js
+│   ├── routes/index.js
+│   ├── services/imageService.js
+│   └── utils/{response,errors}.js
+├── src/server.js
+├── package.json
+├── .env.example
+└── README.md
 ```
 
 ## 🛠 Installation & Setup
 
-### Prerequisites
+### Prasyarat
 
-- Node.js >= 16.0.0
+- Node.js >= 18 (disarankan 20, sesuai Dockerfile)
 - npm atau yarn
 
-### Steps
+### Langkah
 
-1. **Clone repository**
+1) Clone repo dan install dependencies
 
-   ```bash
-   git clone <repository-url>
-   cd text-over-image-api
-   ```
+```bash
+git clone <repository-url>
+cd text-over-image
+npm install
+```
 
-2. **Install dependencies**
+2) Salin environment variables (opsional)
 
-   ```bash
-   npm install
-   ```
+```bash
+cp .env.example .env
+```
 
-3. **Setup environment variables**
+3) Jalankan server
 
-   ```bash
-   cp .env.example .env
-   # Edit .env file sesuai kebutuhan
-   ```
+- Development
 
-4. **Start development server**
+```bash
+npm run dev
+```
 
-   ```bash
-   npm run dev
-   ```
+- Production
 
-5. **Start production server**
-   ```bash
-   npm start
-   ```
+Saat ini script `start` mengarah ke file yang tidak ada. Jalankan langsung:
 
-Server akan berjalan di `http://localhost:3000`
+```bash
+node src/server.js
+```
+
+Server: http://localhost:3000
 
 ## 📚 API Endpoints
 
-### 1. Health Check
+### 1) Health Check
 
 ```http
 GET /health
 ```
 
-**Response:**
+Contoh respons singkat:
 
 ```json
 {
@@ -99,42 +90,49 @@ GET /health
   "data": {
     "timestamp": "2024-01-15T10:30:00.000Z",
     "uptime": 3600.123,
-    "memory": {...},
+    "memory": {"rss": 50331648, "heapTotal": 20971520, "heapUsed": 15728640},
     "version": "1.0.0"
   }
 }
 ```
 
-### 2. Upload File Lokal
+### 2) Upload File (Lokal)
 
 ```http
 POST /upload
 Content-Type: multipart/form-data
 ```
 
-**Parameters:**
+Parameter:
 
-- `image` (file): File gambar (JPG/PNG/WebP, max 10MB)
-- `format` (query, optional): Response format (`binary` atau `json`)
+- `image` (file, required): JPG/PNG/WebP, maks. 10MB
+- `address` (text, optional): Alamat untuk watermark
+- `format` (query, optional): `binary` (default) atau `json`
 
-**Example cURL:**
+Contoh cURL:
 
 ```bash
-# Binary response (default)
-curl -X POST -F "image=@photo.jpg" http://localhost:3000/upload
+# Binary (default)
+curl -X POST \
+  -F "image=@photo.jpg" \
+  -F "address=Jl. Sudirman No. 123, Jakarta" \
+  http://localhost:3000/upload
 
-# JSON response
-curl -X POST -F "image=@photo.jpg" "http://localhost:3000/upload?format=json"
+# JSON (gunakan query param)
+curl -X POST \
+  -F "image=@photo.jpg" \
+  -F "address=Jl. Sudirman No. 123, Jakarta" \
+  "http://localhost:3000/upload?format=json"
 ```
 
-### 3. Upload dari URL
+### 3) Upload dari URL
 
 ```http
 POST /upload-url
 Content-Type: application/json
 ```
 
-**Body:**
+Body:
 
 ```json
 {
@@ -143,7 +141,9 @@ Content-Type: application/json
 }
 ```
 
-**Example cURL:**
+Catatan: Endpoint ini tidak menerima `address`. Bila Anda perlu alamat, gunakan endpoint upload file.
+
+Contoh cURL:
 
 ```bash
 curl -X POST \
@@ -152,7 +152,7 @@ curl -X POST \
   http://localhost:3000/upload-url
 ```
 
-### 4. Dokumentasi API
+### 4) Dokumentasi Ringkas (JSON)
 
 ```http
 GET /
@@ -168,6 +168,7 @@ Content-Length: 1234567
 Content-Disposition: inline; filename="watermarked-image.jpg"
 X-Original-Size: 1000000
 X-Processed-Size: 1234567
+X-Source-URL: https://example.com/image.jpg   # hanya untuk /upload-url
 
 [Binary image data]
 ```
@@ -182,338 +183,106 @@ X-Processed-Size: 1234567
   "data": {
     "image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEA...",
     "size": 1234567,
-    "originalSize": 1000000
+    "originalSize": 1000000,
+    "sourceUrl": "https://example.com/image.jpg"
   }
 }
 ```
 
 ## 🎨 Watermark Specifications
 
-- **Posisi**: Bottom-left corner
-- **Background**: Gradient semi-transparan dengan border subtle
-- **Font**: Arial, bold untuk tanggal/waktu, normal untuk alamat
-- **Color**: White (#FFFFFF) untuk teks, Green (#10B981) untuk "Verified"
-- **Drop Shadow**: 2px offset dengan blur 3px
-- **Icon**: Green check mark dengan circle background
-- **Format Multi-line**:
-  ```
-  DD/MM/YYYY HH:mm:ss
-  [Alamat yang panjang otomatis
-  terbagi ke beberapa baris]
-  Verified ✓
-  ```
+- Posisi panel: bottom-left (opsi align kanan tersedia internal)
+- Panel: rounded rectangle semi-transparan (rgba(0,0,0,0.01))
+- Badge waktu: kotak putih + garis aksen + ikon jam + teks bold
+- Format waktu: `DD MMM YYYY HH:mm:ss` (Asia/Jakarta)
+- Alamat: auto-wrap, maks. 3 baris, elipsis saat kepanjangan
+- Verified: ikon lingkaran hijau dengan centang + teks "Verified"
+- Font: `Arial` (fallback sistem), ukuran dinamis berdasarkan lebar gambar
 
-### Format Layout:
-
-1. **Baris 1**: Tanggal dan waktu (format Indonesia)
-2. **Baris 2+**: Alamat (auto-wrap jika panjang)
-3. **Baris terakhir**: "Verified" dengan icon checklist hijau
-
-**Example Output:**
+Contoh struktur multi-baris:
 
 ```
-15/01/2024 10:30:45
-Jl. Sudirman No. 123, Menteng,
-Jakarta Pusat, DKI Jakarta
+15 Sep 2024 10:30:45
+Jl. Sudirman No. 123, Menteng, Jakarta Pusat, DKI Jakarta
 Verified ✓
 ```
 
-## 🔒 Keamanan & Performance
+## 🔒 Keamanan & Performa
 
-### Rate Limiting
+- Rate limiting: 100 request / 15 menit / IP
+- Helmet untuk security headers, CORS configurable
+- Validasi input dengan Joi
+- Validasi tipe file (JPG/PNG/WebP) dan ukuran (<= 10MB)
+- Validasi URL untuk mencegah SSRF; blokir host lokal (localhost, 127.0.0.1, ::1)
 
-- **Limit**: 100 requests per 15 menit per IP
-- **Headers**: Standar rate limit headers
-
-### Security Headers
-
-- Helmet.js untuk security headers
-- CORS configuration
-- Input validation dengan Joi
-- File type validation
-- URL validation untuk mencegah SSRF
-
-### File Restrictions
-
-- **Max size**: 10MB
-- **Allowed formats**: JPG, JPEG, PNG, WebP
-- **Blocked**: Local URLs (localhost, 127.0.0.1)
-
-## 💡 Keuntungan Memory-Only Processing
-
-### 1. **Security**
-
-- Tidak ada file tersimpan di server
-- Menghindari disk space attacks
-- Tidak perlu cleanup mechanism
-
-### 2. **Performance**
-
-- Processing langsung di memory
-- Tidak ada I/O disk overhead
-- Horizontal scaling lebih mudah
-
-### 3. **Privacy**
-
-- File tidak tersimpan permanent
-- Automatic cleanup setelah response
-- GDPR compliant
-
-### 4. **Scalability**
-
-- Stateless application
-- Container-friendly
-- Easy deployment
-
-## 🌐 Frontend Implementation Examples
-
-### JavaScript/Fetch API
+## 🌐 Contoh Frontend Singkat
 
 ```javascript
-// Upload file
-async function uploadImage(file) {
+// Upload file -> JSON
+async function uploadImage(file, address) {
   const formData = new FormData();
   formData.append("image", file);
+  if (address) formData.append("address", address);
+  const res = await fetch("/upload?format=json", { method: "POST", body: formData });
+  return res.json();
+}
 
-  const response = await fetch("/upload?format=json", {
+// Upload dari URL -> JSON
+async function uploadFromUrl(url) {
+  const res = await fetch("/upload-url", {
     method: "POST",
-    body: formData,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, format: "json" }),
   });
-
-  return await response.json();
-}
-
-// Upload from URL
-async function uploadFromUrl(imageUrl) {
-  const response = await fetch("/upload-url", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      url: imageUrl,
-      format: "json",
-    }),
-  });
-
-  return await response.json();
+  return res.json();
 }
 ```
 
-### React Hook Example
-
-```jsx
-import { useState } from "react";
-
-function ImageUploader() {
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  const handleUpload = async (file) => {
-    setLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-
-      const response = await fetch("/upload?format=json", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-      setResult(data);
-    } catch (error) {
-      console.error("Upload failed:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div>
-      <input
-        type="file"
-        accept="image/*"
-        onChange={(e) => handleUpload(e.target.files[0])}
-      />
-      {loading && <p>Processing...</p>}
-      {result?.success && (
-        <img
-          src={result.data.image}
-          alt="Watermarked"
-          style={{ maxWidth: "100%" }}
-        />
-      )}
-    </div>
-  );
-}
-```
-
-### HTML Form Example
-
-```html
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>Image Watermark API</title>
-  </head>
-  <body>
-    <h1>Upload Image</h1>
-
-    <!-- File Upload Form -->
-    <form action="/upload" method="post" enctype="multipart/form-data">
-      <input type="file" name="image" accept="image/*" required />
-      <button type="submit">Upload & Watermark</button>
-    </form>
-
-    <!-- URL Upload Form -->
-    <form id="urlForm">
-      <input
-        type="url"
-        id="imageUrl"
-        placeholder="https://example.com/image.jpg"
-        required
-      />
-      <button type="submit">Process URL</button>
-    </form>
-
-    <div id="result"></div>
-
-    <script>
-      document
-        .getElementById("urlForm")
-        .addEventListener("submit", async (e) => {
-          e.preventDefault();
-          const url = document.getElementById("imageUrl").value;
-
-          try {
-            const response = await fetch("/upload-url", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ url, format: "json" }),
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-              document.getElementById(
-                "result"
-              ).innerHTML = `<img src="${data.data.image}" style="max-width: 100%;">`;
-            }
-          } catch (error) {
-            console.error("Error:", error);
-          }
-        });
-    </script>
-  </body>
-</html>
-```
-
-## 🧪 Testing
-
-### Manual Testing
+## 🧪 Testing Cepat
 
 ```bash
-# Test health check
+# Health check
 curl http://localhost:3000/health
 
-# Test file upload
-curl -X POST -F "image=@test.jpg" http://localhost:3000/upload?format=json
+# Upload file (JSON)
+curl -X POST -F "image=@test.jpg" "http://localhost:3000/upload?format=json"
 
-# Test URL upload
+# Upload URL (JSON)
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"url":"https://picsum.photos/800/600","format":"json"}' \
   http://localhost:3000/upload-url
-```
 
-### Load Testing dengan curl
-
-```bash
-# Test rate limiting
-for i in {1..110}; do
-  echo "Request $i"
-  curl -s -o /dev/null -w "%{http_code}\n" \
-    -X POST -F "image=@test.jpg" http://localhost:3000/upload
+# Uji rate limiting
+for i in {1..110}; do \
+  curl -s -o /dev/null -w "%{http_code}\\n" -X POST -F "image=@test.jpg" http://localhost:3000/upload; \
 done
 ```
 
-## 📊 Monitoring & Logging
+## 📊 Logging
 
-### Health Check Response
-
-```json
-{
-  "success": true,
-  "message": "Service is healthy",
-  "data": {
-    "timestamp": "2024-01-15T10:30:00.000Z",
-    "uptime": 3600.123,
-    "memory": {
-      "rss": 50331648,
-      "heapTotal": 20971520,
-      "heapUsed": 15728640,
-      "external": 1048576,
-      "arrayBuffers": 524288
-    },
-    "version": "1.0.0"
-  }
-}
-```
-
-### Error Logging
-
-Aplikasi secara otomatis log error dengan informasi:
-
-- Error message dan stack trace
-- Request URL dan method
-- User IP dan User Agent
-- Timestamp
+Error otomatis dilog dengan informasi pesan, stack trace, URL, method, IP, User-Agent, dan timestamp. Respons error memakai format JSON konsisten.
 
 ## 🚀 Deployment
 
 ### Docker
 
-```dockerfile
-FROM node:18-alpine
+Repo menyertakan Dockerfile yang menjalankan `node src/server.js` secara langsung.
 
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci --only=production
-
-COPY . .
-
-EXPOSE 3000
-
-CMD ["npm", "start"]
+```bash
+docker build -t text-over-image:latest .
+docker run --rm -p 3000:3000 text-over-image:latest
 ```
 
-### Environment Variables untuk Production
+### Environment Variables (opsional)
 
 ```bash
 NODE_ENV=production
 PORT=3000
 CORS_ORIGIN=https://yourdomain.com
+
+# Catatan: WATERMARK_ADDRESS saat ini hanya dipakai pada contoh dokumentasi internal,
+# bukan output watermark utama. Untuk watermark, kirim field address saat upload file.
 WATERMARK_ADDRESS=Your Company, Your City
 ```
 
-## 🤝 Contributing
-
-1. Fork repository
-2. Create feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 📞 Support
-
-Jika ada pertanyaan atau issue:
-
-1. Buka GitHub Issues
-2. Email: support@yourcompany.com
-3. Documentation: API endpoint `/` untuk dokumentasi lengkap
