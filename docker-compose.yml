@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  app:
+    build: .
+    image: text-over-image:latest
+    container_name: text-over-image
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Opsional: sesuaikan sesuai kebutuhan Anda
+      - CORS_ORIGIN=*
+      - WATERMARK_ADDRESS=Jakarta, Indonesia
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
