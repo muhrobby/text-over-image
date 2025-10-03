@@ -1,34 +1,47 @@
 # syntax=docker/dockerfile:1
+# --- STAGE 1: builder ---
+FROM node:20-bookworm-slim AS builder
+ENV NODE_ENV=production
+WORKDIR /app
 
-# Base image
-FROM node:20-alpine AS base
+# 1) deps dulu agar cache optimal
+COPY package*.json ./
+RUN npm ci
+
+# 2) salin source
+COPY . .
+# (opsional) kalau pakai TypeScript:
+# RUN npm run build
+
+# --- STAGE 2: runtime ---
+FROM node:20-bookworm-slim AS runtime
+
+# butuh curl untuk healthcheck; tzdata untuk TZ Asia/Jakarta
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl tzdata tini fontconfig \
+    fonts-dejavu-core fonts-dejavu-extra \
+    fonts-liberation2 \
+    fonts-noto fonts-noto-color-emoji fonts-noto-cjk \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_ENV=production \
+    PORT=3002 \
+    TZ=Asia/Jakarta
 
 WORKDIR /app
 
-# Install minimal runtime deps sometimes needed by native modules
-RUN apk add --no-cache libc6-compat
+# ambil node_modules dari builder + source runtime
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app ./
+# kalau pakai TypeScript dan build ke dist:
+# COPY --from=builder /app/dist ./dist
 
-# Copy manifests first for better layer caching
-COPY package*.json ./
+# user non-root
+USER node
 
-# Install production dependencies
-RUN npm ci --omit=dev
+EXPOSE 3002
 
-# Copy source code
-COPY . .
-
-# Environment
-ENV NODE_ENV=production \
-    PORT=3000 \
-    TZ=Asia/Jakarta
-
-# Expose port
-EXPOSE 3000
-
-# Use tini for proper signal handling (optional but recommended)
-RUN apk add --no-cache tini
-ENTRYPOINT ["/sbin/tini", "--"]
-
-# Start the server directly (avoid relying on package.json start)
+ENTRYPOINT ["/usr/bin/tini", "--"]
+# kalau pakai dist:
+# CMD ["node", "dist/server.js"]
 CMD ["node", "src/server.js"]
-

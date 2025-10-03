@@ -1,22 +1,41 @@
-version: "3.8"
-
 services:
-  app:
-    build: .
-    image: text-over-image:latest
+  textoverimage:
+    build:
+      context: ./app # <- pakai Dockerfile yg ada di repo
+      dockerfile: Dockerfile
     container_name: text-over-image
     restart: unless-stopped
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      # Opsional: sesuaikan sesuai kebutuhan Anda
-      - CORS_ORIGIN=*
-      - WATERMARK_ADDRESS=Jakarta, Indonesia
-    ports:
-      - "3000:3000"
+      NODE_ENV: ${NODE_ENV}
+      PORT: ${PORT}
+      CORS_ORIGIN: ${CORS_ORIGIN}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:3002/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-proxy
+      - traefik.http.routers.toi.rule=Host(`stamps.humahub.my.id`)
+      - traefik.http.routers.toi.entrypoints=websecure
+      - traefik.http.routers.toi.tls=true
+      - traefik.http.routers.toi.tls.certresolver=cf
+      - traefik.http.services.toi.loadbalancer.server.port=3002
+
+      - traefik.http.routers.toi.middlewares=toi-header,toi-rl
+      - traefik.http.middlewares.toi-header.headers.stsSeconds=31536000
+      - traefik.http.middlewares.toi-header.headers.stsIncludeSubdomains=true
+      - traefik.http.middlewares.toi-header.headers.stsPreload=true
+      - traefik.http.middlewares.toi-header.headers.frameDeny=true
+      - traefik.http.middlewares.toi-header.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.toi-header.headers.referrerPolicy=no-referrer-when-downgrade
+
+      - traefik.http.middlewares.toi-rl.ratelimit.average=120
+      - traefik.http.middlewares.toi-rl.ratelimit.burst=240
+    networks:
+      - traefik-proxy
+
+networks:
+  traefik-proxy:
+    external: true
