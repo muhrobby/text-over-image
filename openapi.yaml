@@ -1,0 +1,409 @@
+openapi: 3.0.3
+info:
+  title: Image Watermark API
+  description: |
+    Professional image watermarking API with automatic timestamp, address, and verification badge.
+    
+    ## Features
+    - ✅ Auto watermark with date, time, and location
+    - 📍 Custom address support with auto text wrapping
+    - 🎨 Professional design with responsive typography
+    - 🚀 High-performance processing (no disk storage)
+    - 🔒 Secure with rate limiting and validation
+    - 💾 Preserves original image quality and resolution
+    
+    ## Supported Formats
+    - Input: JPG, JPEG, PNG, WebP
+    - Output: Same as input (preserved)
+    - Max Size: 10MB
+    
+    ## Rate Limiting
+    - 100 requests per 15 minutes per IP address
+    - Rate limit headers included in all responses
+  version: 2.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: ISC
+    
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://your-domain.com
+    description: Production server
+
+tags:
+  - name: Upload
+    description: Image upload and watermarking endpoints
+  - name: Health
+    description: API health check
+  - name: Documentation
+    description: API documentation
+
+paths:
+  /upload:
+    post:
+      tags:
+        - Upload
+      summary: Upload image file
+      description: |
+        Upload an image file and add professional watermark with timestamp, address, and verification badge.
+        
+        The watermark includes:
+        - Current date and time (Asia/Jakarta timezone)
+        - Custom or default address (auto-wrapped to 3 lines max)
+        - Verified status badge with checkmark
+      operationId: uploadFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Image file (JPG, PNG, WebP - Max 10MB)
+                address:
+                  type: string
+                  maxLength: 500
+                  description: Custom address text (optional)
+                  example: "Jalan Sudirman No. 123, Jakarta Pusat, DKI Jakarta"
+                format:
+                  type: string
+                  enum: [binary, json]
+                  default: binary
+                  description: Response format (binary for direct image, json for base64)
+      responses:
+        '200':
+          description: Image processed successfully
+          headers:
+            Content-Type:
+              schema:
+                type: string
+                example: image/jpeg
+            Content-Length:
+              schema:
+                type: integer
+            X-Original-Size:
+              schema:
+                type: integer
+              description: Original image size in bytes
+            X-Processed-Size:
+              schema:
+                type: integer
+              description: Processed image size in bytes
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageResponse'
+        '400':
+          description: Bad request (invalid file, size, or format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                noFile:
+                  summary: No file provided
+                  value:
+                    success: false
+                    message: "No image file provided"
+                    timestamp: "2025-11-11T12:00:00.000Z"
+                invalidFormat:
+                  summary: Invalid file format
+                  value:
+                    success: false
+                    message: "Invalid file format. Only JPG, PNG, and WebP are allowed"
+                    timestamp: "2025-11-11T12:00:00.000Z"
+                fileTooLarge:
+                  summary: File too large
+                  value:
+                    success: false
+                    message: "File too large. Maximum size is 10MB"
+                    timestamp: "2025-11-11T12:00:00.000Z"
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /upload-url:
+    post:
+      tags:
+        - Upload
+      summary: Upload image from URL
+      description: |
+        Download an image from a URL and add professional watermark.
+        
+        The API will:
+        1. Download the image from the provided URL
+        2. Validate format and size
+        3. Add watermark with timestamp and address
+        4. Return the processed image
+        
+        Note: Local URLs (localhost, 127.0.0.1) are blocked for security.
+      operationId: uploadFromUrl
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - url
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: Direct URL to image file
+                  example: "https://example.com/images/photo.jpg"
+                address:
+                  type: string
+                  maxLength: 500
+                  description: Custom address text (optional)
+                  example: "Jalan Sudirman No. 123, Jakarta Pusat"
+                format:
+                  type: string
+                  enum: [binary, json]
+                  default: binary
+                  description: Response format
+            examples:
+              binary:
+                summary: Binary response
+                value:
+                  url: "https://example.com/photo.jpg"
+                  address: "Jakarta, Indonesia"
+                  format: "binary"
+              json:
+                summary: JSON response with base64
+                value:
+                  url: "https://example.com/photo.jpg"
+                  address: "Jakarta, Indonesia"
+                  format: "json"
+      responses:
+        '200':
+          description: Image processed successfully
+          headers:
+            X-Source-URL:
+              schema:
+                type: string
+              description: Original image URL
+            X-Original-Size:
+              schema:
+                type: integer
+            X-Processed-Size:
+              schema:
+                type: integer
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ImageResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          sourceUrl:
+                            type: string
+                            description: Original image URL
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                noUrl:
+                  summary: No URL provided
+                  value:
+                    success: false
+                    message: "Image URL is required"
+                    timestamp: "2025-11-11T12:00:00.000Z"
+                invalidUrl:
+                  summary: Invalid URL format
+                  value:
+                    success: false
+                    message: "Please provide a valid image URL"
+                    timestamp: "2025-11-11T12:00:00.000Z"
+                localUrl:
+                  summary: Local URL blocked
+                  value:
+                    success: false
+                    message: "Local URLs are not allowed for security reasons"
+                    timestamp: "2025-11-11T12:00:00.000Z"
+        '408':
+          description: Request timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check API server status and get system metrics
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Service is healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  data:
+                    type: object
+                    properties:
+                      uptime:
+                        type: number
+                        description: Server uptime in seconds
+                        example: 12345.67
+                      memory:
+                        type: object
+                        properties:
+                          rss:
+                            type: number
+                          heapTotal:
+                            type: number
+                          heapUsed:
+                            type: number
+                          external:
+                            type: number
+                      version:
+                        type: string
+                        example: "2.0.0"
+
+  /:
+    get:
+      tags:
+        - Documentation
+      summary: Get API documentation
+      description: Returns comprehensive API documentation in JSON format
+      operationId: getDocumentation
+      responses:
+        '200':
+          description: API documentation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  version:
+                    type: string
+                  description:
+                    type: string
+                  baseUrl:
+                    type: string
+                  endpoints:
+                    type: object
+                  features:
+                    type: array
+                    items:
+                      type: string
+                  watermark:
+                    type: object
+
+components:
+  schemas:
+    ImageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Image processed successfully"
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          type: object
+          properties:
+            image:
+              type: string
+              description: Base64 encoded image (data URL format)
+              example: "data:image/jpeg;base64,/9j/4AAQSkZJRg..."
+            size:
+              type: integer
+              description: Processed image size in bytes
+              example: 1234567
+            originalSize:
+              type: integer
+              description: Original image size in bytes
+              example: 987654
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Error description"
+        timestamp:
+          type: string
+          format: date-time
+        meta:
+          type: object
+          properties:
+            statusCode:
+              type: integer
+              example: 400
+
+  securitySchemes: {}
+
+security: []

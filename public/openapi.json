@@ -1,0 +1,442 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Text Over Image API",
+    "description": "API untuk menambahkan watermark profesional pada gambar dengan timestamp, alamat, dan status verifikasi otomatis. Watermark ditambahkan dengan format multi-line yang responsif dan dapat dikustomisasi.",
+    "version": "2.0.0",
+    "contact": {
+      "name": "API Support",
+      "email": "support@example.com"
+    },
+    "license": {
+      "name": "ISC",
+      "url": "https://opensource.org/licenses/ISC"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Development server"
+    },
+    {
+      "url": "https://your-production-url.com",
+      "description": "Production server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Image Processing",
+      "description": "Endpoints untuk memproses gambar dan menambahkan watermark"
+    },
+    {
+      "name": "Health",
+      "description": "Health check dan monitoring"
+    },
+    {
+      "name": "Documentation",
+      "description": "API documentation endpoint"
+    }
+  ],
+  "paths": {
+    "/upload": {
+      "post": {
+        "tags": ["Image Processing"],
+        "summary": "Upload gambar dari file lokal",
+        "description": "Upload file gambar dan tambahkan watermark dengan timestamp, alamat, dan status verified",
+        "operationId": "uploadFile",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["image"],
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "File gambar (JPG, PNG, WebP - Max 10MB)"
+                  },
+                  "address": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Alamat untuk ditampilkan di watermark (opsional). Jika tidak diisi, akan menggunakan alamat default dari config.",
+                    "example": "Jl. Sudirman No. 123, Jakarta Pusat, DKI Jakarta"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Format response (binary atau json)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["binary", "json"],
+              "default": "binary"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Image processed successfully",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageProcessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Invalid file or parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upload-url": {
+      "post": {
+        "tags": ["Image Processing"],
+        "summary": "Upload gambar dari URL",
+        "description": "Download gambar dari URL dan tambahkan watermark dengan timestamp, alamat, dan status verified",
+        "operationId": "uploadFromUrl",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL gambar (JPG, PNG, WebP)",
+                    "example": "https://example.com/image.jpg"
+                  },
+                  "address": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Alamat untuk ditampilkan di watermark (opsional)",
+                    "example": "Jl. Sudirman No. 123, Jakarta Pusat, DKI Jakarta"
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": ["binary", "json"],
+                    "default": "binary",
+                    "description": "Format response"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Image processed successfully",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageProcessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Invalid URL or parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request timeout while downloading image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check endpoint",
+        "description": "Cek status server dan informasi sistem",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": ["Documentation"],
+        "summary": "API documentation",
+        "description": "Get API documentation and usage information",
+        "operationId": "getDocumentation",
+        "responses": {
+          "200": {
+            "description": "Documentation retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ImageProcessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Image processed successfully"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2025-11-11T11:15:00.000Z"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "image": {
+                "type": "string",
+                "description": "Base64 encoded image with data URI prefix",
+                "example": "data:image/jpeg;base64,/9j/4AAQSkZJRg..."
+              },
+              "size": {
+                "type": "integer",
+                "description": "Processed image size in bytes",
+                "example": 1234567
+              },
+              "originalSize": {
+                "type": "integer",
+                "description": "Original image size in bytes",
+                "example": 987654
+              },
+              "sourceUrl": {
+                "type": "string",
+                "description": "Source URL (only for /upload-url endpoint)",
+                "example": "https://example.com/image.jpg"
+              }
+            }
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "message": {
+            "type": "string",
+            "example": "Error description"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2025-11-11T11:15:00.000Z"
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "statusCode": {
+                "type": "integer",
+                "example": 400
+              }
+            }
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Service is healthy"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "uptime": {
+                "type": "number",
+                "description": "Server uptime in seconds",
+                "example": 3600.5
+              },
+              "memory": {
+                "type": "object",
+                "properties": {
+                  "rss": {
+                    "type": "integer",
+                    "description": "Resident Set Size"
+                  },
+                  "heapTotal": {
+                    "type": "integer"
+                  },
+                  "heapUsed": {
+                    "type": "integer"
+                  },
+                  "external": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "version": {
+                "type": "string",
+                "example": "1.0.0"
+              }
+            }
+          }
+        }
+      },
+      "DocumentationResponse": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Text Over Image API"
+          },
+          "version": {
+            "type": "string",
+            "example": "1.0.0"
+          },
+          "description": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "endpoints": {
+            "type": "object"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "watermark": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "API key for authentication (if enabled)"
+      }
+    }
+  }
+}

@@ -2,6 +2,7 @@ const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
+const path = require("path");
 const config = require("./config/config");
 const routes = require("./routes");
 const { errorHandler, notFound } = require("./middleware/errorHandler");
@@ -13,8 +14,17 @@ const app = express();
 // Ensures rate limiter and req.ip work with X-Forwarded-For
 app.set('trust proxy', 1);
 
-// Security middleware
-app.use(helmet());
+// Security middleware with CSP for inline scripts
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:", "http:"],
+    },
+  },
+}));
 app.use(cors(config.cors));
 
 // Rate limiting
@@ -29,7 +39,10 @@ app.use(
   express.urlencoded({ extended: true, limit: config.upload.maxFileSize })
 );
 
-// Routes
+// Serve static files (frontend)
+app.use(express.static(path.join(__dirname, '../public')));
+
+// API Routes
 app.use("/", routes);
 
 // Error handling

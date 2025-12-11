@@ -54,7 +54,7 @@ class ImageController {
 
   async uploadFromUrl(req, res, next) {
     try {
-      const { url, format = "binary" } = req.body;
+      const { url, format = "binary", address } = req.body;
 
       if (!url) {
         throw new AppError("Image URL is required", 400);
@@ -90,8 +90,11 @@ class ImageController {
         );
       }
 
-      // Process image with watermark
-      const processedImage = await imageService.addWatermark(imageBuffer);
+      // Process image with watermark (dengan address)
+      const processedImage = await imageService.addWatermark(
+        imageBuffer,
+        address
+      );
       const meta = await sharp(processedImage).metadata();
       const outFormat = meta.format || "jpeg";
       const ext = outFormat === "jpeg" ? "jpg" : outFormat;

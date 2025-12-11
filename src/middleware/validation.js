@@ -6,6 +6,7 @@ const config = require("../config/config");
 const schemas = {
   fileUpload: Joi.object({
     format: Joi.string().valid("binary", "json").optional(),
+    address: Joi.string().max(500).optional(),
   }),
 
   urlUpload: Joi.object({
@@ -13,6 +14,7 @@ const schemas = {
       "string.uri": "Please provide a valid image URL",
       "any.required": "Image URL is required",
     }),
+    address: Joi.string().max(500).optional(),
     format: Joi.string().valid("binary", "json").optional(),
   }),
 };
@@ -20,9 +22,18 @@ const schemas = {
 const validateFileUpload = (req, res, next) => {
   try {
     // Validate query parameters
-    const { error } = schemas.fileUpload.validate(req.query);
-    if (error) {
-      throw new AppError(error.details[0].message, 400);
+    const { error: queryError } = schemas.fileUpload.validate(req.query);
+    if (queryError) {
+      throw new AppError(queryError.details[0].message, 400);
+    }
+    
+    // Validate body parameters (address)
+    const addressSchema = Joi.object({
+      address: Joi.string().max(200).optional(),
+    });
+    const { error: bodyError } = addressSchema.validate(req.body);
+    if (bodyError) {
+      throw new AppError(bodyError.details[0].message, 400);
     }
 
     // Check if file exists

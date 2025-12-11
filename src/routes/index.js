@@ -1,14 +1,21 @@
 const express = require("express");
 const multer = require("multer");
+const swaggerUi = require("swagger-ui-express");
+const YAML = require("yamljs");
+const path = require("path");
 const imageController = require("../controllers/imageController");
 const {
   validateFileUpload,
   validateUrlUpload,
 } = require("../middleware/validation");
+const { authenticateToken } = require("../middleware/auth");
 const config = require("../config/config");
 const { AppError } = require("../utils/errors");
 
 const router = express.Router();
+
+// Load OpenAPI specification
+const swaggerDocument = YAML.load(path.join(__dirname, "../../openapi.yaml"));
 
 // Multer configuration for file uploads
 const upload = multer({
@@ -31,17 +38,33 @@ const upload = multer({
   },
 });
 
-// Routes
-router.get("/", imageController.getDocumentation);
+// Swagger UI Documentation
+router.use("/api-docs", swaggerUi.serve);
+router.get("/api-docs", swaggerUi.setup(swaggerDocument, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: "Image Watermark API - Documentation"
+}));
+
+// API Routes
 router.get("/health", imageController.healthCheck);
 
+// Protected routes with authentication
 router.post(
   "/upload",
+  authenticateToken,
   upload.single("image"),
   validateFileUpload,
   imageController.uploadFile
 );
 
-router.post("/upload-url", validateUrlUpload, imageController.uploadFromUrl);
+router.post(
+  "/upload-url",
+  authenticateToken,
+  validateUrlUpload,
+  imageController.uploadFromUrl
+);
+
+// Home/Documentation route (JSON format)
+router.get("/api", imageController.getDocumentation);
 
 module.exports = router;

@@ -6,6 +6,11 @@ module.exports = {
     env: process.env.NODE_ENV || "development",
   },
 
+  auth: {
+    apiToken: process.env.API_TOKEN || null, // Set API_TOKEN in .env for authentication
+    requireAuth: process.env.REQUIRE_AUTH === "true", // Enable with REQUIRE_AUTH=true
+  },
+
   upload: {
     maxFileSize: "10MB",
     maxFileSizeBytes: 10 * 1024 * 1024, // 10MB in bytes
@@ -16,11 +21,16 @@ module.exports = {
   watermark: {
     position: "bottom-left",
     padding: 20,
-    backgroundColor: "rgba(0, 0, 0, 0.1)",
+    backgroundColor: "rgba(0, 0, 0, 0.65)", // Lebih gelap untuk kontras lebih baik
     textColor: "#FFFFFF",
-    fontFamily: "Arial",
+    fontFamily: "Inter, 'Segoe UI', 'DejaVu Sans', 'Noto Color Emoji', Arial, sans-serif",
     baseFontSize: 20,
     address: process.env.WATERMARK_ADDRESS || "Jakarta, Indonesia",
+    
+    // Advanced styling options
+    panelRadius: 18,        // Border radius panel
+    stripeColor: "#FFCC33", // Yellow accent color
+    verifiedColor: "#00D084", // Green checkmark color
   },
 
   rateLimit: {

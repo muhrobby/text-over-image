@@ -1,21 +1,56 @@
 // services/ImageService.js (CommonJS)
 const sharp = require("sharp");
 const moment = require("moment-timezone");
+const fs = require("fs").promises;
+const path = require("path");
 const config = require("../config/config");
 const { AppError } = require("../utils/errors");
 
-// ===================== Utils: text measure & wrap =====================
+// ===================== THEME CONFIGURATION =====================
+const DEFAULT_THEME = {
+  // Spacing & Layout
+  outerPad: 32,           // Margin ke tepi gambar
+  innerPad: 16,           // Padding internal
+  lineGap: 8,             // Jarak antar baris teks (lebih rapat)
+  
+  // Colors - Professional & Clean
+  timeColor: "#FFFFFF",   // Warna teks waktu
+  textColor: "#FFFFFF",   // Warna teks alamat
+  strokeColor: "#000000", // Warna outline untuk visibility
+  
+  // Typography - Professional
+  fontStack: "Inter, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif",
+  fontWeightTime: "600",      // Semi-bold untuk waktu
+  fontWeightAddress: "500",   // Medium untuk alamat
+  
+  // Logo
+  logoSize: 180,              // Logo lebih besar (15% width base)
+  logoOpacity: 0.95,          // Slightly transparent
+  
+  // Text Sizes (akan dikalkulasi responsive)
+  baseTimeFontSize: 40,       // Base untuk timestamp (sama dengan address)
+  baseAddressFontSize: 40,    // Base untuk alamat (ukuran sama)
+};
+
+// ===================== TEXT UTILITIES =====================
+/**
+ * Estimasi lebar teks dalam pixel
+ */
 function estimateWidthPx(str, fontSize, avgFactor = 0.58) {
   return (str?.length || 0) * fontSize * avgFactor;
 }
 
-// Bungkus teks berdasarkan lebar maksimum (prioritas pecah di koma)
+/**
+ * Membungkus teks panjang menjadi multiple lines
+ * dengan prioritas pemisahan di koma
+ */
 function wrapTextByWords(
   text,
   { maxWidthPx, fontSize = 24, avgFactor = 0.58, preferComma = true }
 ) {
   if (!text) return ["-"];
 
+  // Split by comma first if preferred, then by spaces
   const words = text
     .split(preferComma ? /,\s*/ : /\s+/)
     .flatMap((seg, i, arr) => (i < arr.length - 1 ? [seg + ","] : [seg]))
@@ -24,44 +59,55 @@ function wrapTextByWords(
 
   const lines = [];
   let line = "";
+  
   for (const w of words) {
-    const cand = line ? line + " " + w : w;
-    if (estimateWidthPx(cand, fontSize, avgFactor) <= maxWidthPx) {
-      line = cand;
+    const candidate = line ? line + " " + w : w;
+    if (estimateWidthPx(candidate, fontSize, avgFactor) <= maxWidthPx) {
+      line = candidate;
     } else {
       if (line) lines.push(line);
       if (estimateWidthPx(w, fontSize, avgFactor) > maxWidthPx) {
-        lines.push(w); // kata super panjang dipaksa 1 baris sendiri
+        lines.push(w); // Kata terlalu panjang, paksa 1 baris sendiri
         line = "";
       } else {
         line = w;
       }
     }
   }
+  
   if (line) lines.push(line);
   return lines;
 }
 
-// Batasi jumlah baris & tambahkan "…" bila kepotong
+/**
+ * Batasi jumlah baris & tambahkan ellipsis bila kepotong
+ */
 function clampLinesWithEllipsis(
   lines,
   { maxLines, maxWidthPx, fontSize = 24, avgFactor = 0.58 }
 ) {
   if (lines.length <= maxLines) return lines;
+  
   const kept = lines.slice(0, maxLines);
   let last = kept[maxLines - 1] + " " + lines.slice(maxLines).join(" ");
-  const ell = "…";
+  const ellipsis = "…";
+  
+  // Trim kata sampai muat dengan ellipsis
   while (
-    estimateWidthPx(last + ell, fontSize, avgFactor) > maxWidthPx &&
+    estimateWidthPx(last + ellipsis, fontSize, avgFactor) > maxWidthPx &&
     last.includes(" ")
   ) {
     last = last.substring(0, last.lastIndexOf(" "));
   }
-  kept[maxLines - 1] = (last || kept[maxLines - 1]) + ell;
+  
+  kept[maxLines - 1] = (last || kept[maxLines - 1]) + ellipsis;
   return kept;
 }
 
-function esc(s = "") {
+/**
+ * Escape special XML/SVG characters
+ */
+function escapeXml(s = "") {
   return String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -70,196 +116,264 @@ function esc(s = "") {
     .replace(/'/g, "&apos;");
 }
 
-// ===================== SVG Builder (advanced, bottom-left) =====================
-function buildWatermarkSVGAdvanced({
+// ===================== DYNAMIC TYPOGRAPHY CALCULATOR =====================
+/**
+ * Calculate responsive font sizes based on image width
+ * Scaling penuh tanpa batasan minimum
+ * Base 1200px untuk foto smartphone (3000-4000px width = 2.5-3.3x scaling)
+ */
+function calculateFontSizes(imageWidth) {
+  const scaleFactor = imageWidth / 1200; // Base diperkecil agar scaling lebih besar
+  
+  // Semua font menggunakan baseAddressFontSize (40px) untuk konsistensi
+  const fontSize = Math.round(DEFAULT_THEME.baseAddressFontSize * scaleFactor);
+  
+  return {
+    time: fontSize,        // Sama dengan address
+    address: fontSize,     // Base 40px
+    base: fontSize         // Semua sama untuk konsistensi
+  };
+}
+
+/**
+ * Calculate logo size based on image dimensions
+ */
+function calculateLogoSize(imageWidth, imageHeight) {
+  // Logo size responsive: 15% dari lebar gambar, range 150-500px
+  const logoSize = Math.max(150, Math.min(500, Math.round(imageWidth * 0.15)));
+  return logoSize;
+}
+
+// ===================== SVG COMPONENT BUILDERS =====================
+/**
+ * Build professional timestamp text (simple & clean)
+ */
+function buildTimestamp({ x, y, timestamp, fontSize, theme }) {
+  // Format yang lebih profesional: DD MMM YYYY | HH:mm:ss
+  const parts = timestamp.split(' ');
+  const datePart = parts.slice(0, 3).join(' '); // DD MMM YYYY
+  const timePart = parts.slice(3).join(' ');     // HH:mm:ss
+  const fullText = `${datePart} | ${timePart}`;
+  
+  return `
+  <!-- Timestamp dengan outline untuk visibility -->
+  <text x="${x}" y="${y}" text-anchor="end"
+        font-size="${fontSize}" 
+        font-weight="${theme.fontWeightTime}" 
+        stroke="${theme.strokeColor}" stroke-width="4" stroke-linejoin="round"
+        fill="none">
+    ${escapeXml(fullText)}
+  </text>
+  <text x="${x}" y="${y}" text-anchor="end"
+        font-size="${fontSize}" 
+        font-weight="${theme.fontWeightTime}" 
+        fill="${theme.timeColor}">
+    ${escapeXml(fullText)}
+  </text>`;
+}
+
+/**
+ * Build address text with outline (right-aligned, bottom-right position)
+ */
+function buildAddressText({ x, y, lines, fontSize, lineGap, theme }) {
+  return lines.map((line, i) => {
+    const lineY = y + (i * lineGap);
+    return `
+    <!-- Address line ${i + 1} with stroke -->
+    <text x="${x}" y="${lineY}" text-anchor="end"
+          font-size="${fontSize}" 
+          font-weight="${theme.fontWeightAddress}"
+          stroke="${theme.strokeColor}" stroke-width="4" stroke-linejoin="round"
+          fill="none">
+      ${escapeXml(line)}
+    </text>
+    <text x="${x}" y="${lineY}" text-anchor="end"
+          font-size="${fontSize}" 
+          font-weight="${theme.fontWeightAddress}"
+          fill="${theme.textColor}">
+      ${escapeXml(line)}
+    </text>`;
+  }).join('');
+}
+
+/**
+ * Build logo in top-right corner
+ */
+function buildLogoTopRight({ x, y, size, logoDataUrl, opacity }) {
+  if (!logoDataUrl) return '';
+  
+  return `
+  <!-- Brand Logo - Top Right -->
+  <image href="${escapeXml(logoDataUrl)}" 
+         x="${x}" y="${y}" 
+         width="${size}" height="${size}" 
+         opacity="${opacity}" 
+         preserveAspectRatio="xMidYMid meet"/>`;
+}
+
+// ===================== MAIN SVG BUILDER =====================
+/**
+ * Build complete watermark SVG overlay - PROFESSIONAL LAYOUT
+ * - Logo: Top-right corner (besar, transparan)
+ * - Timestamp & Address: Bottom-right corner (right-aligned)
+ * - NO verified badge
+ */
+function buildWatermarkSVG({
   width,
   height,
-  timestamp, // "DD/MM/YYYY HH:mm:ss"
-  address, // string alamat
-  status = "Verified",
-  align = "left", // 'left' | 'right'
-  panelWidthPx, // optional: fixed width; default 70% dari width
-  maxAddressLines = 3,
-  logoDataUrl = null, // opsional
-  logoSizePx = 50, // opsional
+  timestamp,
+  address,
+  maxAddressLines = 5,
+  logoDataUrl = null,
   theme = {},
 }) {
-  // THEME (fallback ke config atau default)
-  const PAD = theme.outerPad ?? config?.watermark?.padding ?? 24; // margin panel ke tepi
-  const IPAD = theme.innerPad ?? 20; // padding dalam panel
-  const GAP = theme.lineGap ?? 28; // jarak antar baris
-  const fontStack =
-    theme.fontStack ||
-    config?.watermark?.fontFamily ||
-    "Inter, 'DejaVu Sans', 'Noto Color Emoji', Arial, sans-serif";
+  // Merge theme dengan default
+  const finalTheme = { ...DEFAULT_THEME, ...theme };
+  
+  const {
+    outerPad,
+    lineGap,
+    fontStack,
+    logoOpacity
+  } = finalTheme;
 
-  const panelBg = theme.panelBg || "rgba(0,0,0,0.01)"; // semi-transparan
-  const stripe = theme.stripeColor || "#FFCC33";
-  const timeColor = theme.timeColor || "#0A0A0A";
-  const txtWhite = theme.textColor || "#FFFFFF";
-  const verifiedGreen = theme.verifiedColor || "#00D084";
+  // Calculate responsive font sizes
+  const fonts = calculateFontSizes(width);
+  
+  // Calculate logo size (responsive & proportional)
+  const logoSize = calculateLogoSize(width, height);
 
-  // Panel width & posisi
-  const panelW = Math.max(
-    260,
-    Math.min(panelWidthPx ?? Math.round(width * 0.7), width - PAD * 2)
-  );
-  const panelX = align === "right" ? width - PAD - panelW : PAD;
-  const textMaxW = panelW - IPAD * 2;
+  // Logo position - Top Right
+  const logoX = width - outerPad - logoSize;
+  const logoY = outerPad;
 
-  // Typography dinamis (berbasis width)
-  const base = Math.max(16, Math.min(48, Math.round(width * 0.025)));
-  const timeFont = Math.round(base + 6);
-  const dateFont = Math.round(base - 2); // opsional (judul tanggal; bisa dikosongkan)
-  const addrFont = Math.round(base - 2);
-  const verFont = Math.round(base - 4);
-
-  // Badge waktu (di dalam panel, baris teratas)
-  const badgeH = Math.max(56, Math.round(base * 1.45));
-  const badgeR = Math.round(base * 0.4);
-  const stripeW = Math.max(8, Math.round(base * 0.35));
-
-  // Hitung lebar minimal badge
-  const estW = estimateWidthPx(String(timestamp || ""), timeFont, 0.58);
-  const innerLeft = stripeW + 40; // stripe + icon + padding
-  const innerRight = 40;
-  const badgeW = Math.max(
-    200,
-    Math.min(innerLeft + estW + innerRight, textMaxW)
-  );
-
-  // Alamat: wrap + clamp
-  let addrLines = wrapTextByWords(
+  // Process address text (wrap & clamp)
+  const maxWidth = width * 0.70; // Max 70% dari lebar gambar untuk address agar tidak terpotong
+  let addressLines = wrapTextByWords(
     (address || "Lokasi tidak tersedia").toString(),
     {
-      maxWidthPx: textMaxW,
-      fontSize: addrFont,
+      maxWidthPx: maxWidth,
+      fontSize: fonts.address,
       avgFactor: 0.58,
       preferComma: true,
     }
   );
-  addrLines = clampLinesWithEllipsis(addrLines, {
+  
+  addressLines = clampLinesWithEllipsis(addressLines, {
     maxLines: maxAddressLines,
-    maxWidthPx: textMaxW,
-    fontSize: addrFont,
+    maxWidthPx: maxWidth,
+    fontSize: fonts.address,
     avgFactor: 0.58,
   });
 
-  // Verified row & heights
-  const logoW = Math.max(16, Number(logoSizePx) || 24);
-  const verifyRowH = Math.max(logoW, verFont);
-  const verifiedGapTop = 12;
+  // Calculate positions - Bottom Right
+  const bottomMargin = outerPad;
+  const rightX = width - outerPad;
+  
+  // Calculate line height for address
+  const addressLineHeight = fonts.address + lineGap;
+  const totalAddressHeight = addressLines.length * addressLineHeight;
+  
+  // Positions (from bottom to top)
+  const addressStartY = height - bottomMargin;
+  const timestampY = addressStartY - totalAddressHeight - (lineGap * 2);
 
-  // Y layout relatif dalam panel
-  const yBadgeRel = IPAD;
-  const yDateRel = yBadgeRel + badgeH + Math.round(GAP * 0.6);
-  const yAddrStartRel = yDateRel + GAP;
-  const yVerifiedRel = yAddrStartRel + addrLines.length * GAP + verifiedGapTop;
+  // Build components
+  const logoSVG = buildLogoTopRight({
+    x: logoX,
+    y: logoY,
+    size: logoSize,
+    logoDataUrl,
+    opacity: logoOpacity
+  });
 
-  // Bottom padding biar tidak mepet
-  const BOTTOM_PAD = Math.max(24, Math.ceil(verifyRowH / 2) + 10);
+  const timestampSVG = buildTimestamp({
+    x: rightX,
+    y: timestampY,
+    timestamp,
+    fontSize: fonts.time,
+    theme: finalTheme
+  });
 
-  // Total tinggi panel
-  const panelH = yVerifiedRel + verifyRowH + BOTTOM_PAD;
+  const addressSVG = buildAddressText({
+    x: rightX,
+    y: addressStartY - totalAddressHeight + addressLineHeight,
+    lines: addressLines,
+    fontSize: fonts.address,
+    lineGap: addressLineHeight,
+    theme: finalTheme
+  });
 
-  // Anchor bottom: tempatkan panel pada bagian bawah gambar
-  const panelY = Math.max(PAD, height - PAD - panelH);
-
-  // tspans alamat
-  const addrTspans = addrLines
-    .map((ln, i) => {
-      const dy = i === 0 ? 0 : GAP;
-      return `<tspan x="${
-        panelX + IPAD
-      }" dy="${dy}" font-size="${addrFont}" fill="${txtWhite}">${esc(
-        ln
-      )}</tspan>`;
-    })
-    .join("");
-
+  // Compose final SVG
   return `
 <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-  <style>text { font-family: ${fontStack}; }</style>
+  <defs>
+    <style>
+      text { 
+        font-family: ${fontStack}; 
+        user-select: none;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+    </style>
+  </defs>
 
-  <!-- Panel -->
-  <rect x="${panelX}" y="${panelY}" width="${panelW}" height="${panelH}" rx="18" ry="18" fill="${panelBg}"/>
+  <!-- Brand Logo - Top Right Corner -->
+  ${logoSVG}
 
-  <!-- Badge waktu -->
-  <g transform="translate(${panelX + IPAD}, ${panelY + yBadgeRel})">
-    <rect x="0" y="0" width="${badgeW}" height="${badgeH}" rx="${badgeR}" ry="${badgeR}" fill="#FFFFFF" />
-    <rect x="0" y="0" width="${stripeW}" height="${badgeH}" rx="${badgeR}" ry="${badgeR}" fill="${stripe}" />
-    <circle cx="${stripeW + 18}" cy="${badgeH / 2}" r="12" fill="${stripe}"/>
-    <path d="M ${stripeW + 18} ${
-    badgeH / 2 - 7
-  } v 7 h 7" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>
-    <text x="${stripeW + 40}" y="${badgeH / 2 + Math.round(timeFont * 0.32)}"
-          font-size="${timeFont}" font-weight="800" fill="${timeColor}">${esc(
-    timestamp || ""
-  )}</text>
-  </g>
+  <!-- Professional Timestamp - Bottom Right -->
+  ${timestampSVG}
 
-  <!-- (Opsional) judul tanggal: kita kosongkan agar tidak dobel info -->
-  <text x="${panelX + IPAD}" y="${
-    panelY + yDateRel
-  }" font-size="${dateFont}" font-weight="700" fill="${txtWhite}"></text>
-
-  <!-- Alamat (auto wrap) -->
-  <text x="${panelX + IPAD}" y="${
-    panelY + yAddrStartRel
-  }" font-size="${addrFont}" font-weight="500">${addrTspans}</text>
-
-  <!-- VERIFIED + logo -->
-  <g transform="translate(${panelX + IPAD}, ${panelY})">
-    ${
-      logoDataUrl
-        ? `
-      <circle cx="${logoW / 2 + 1}" cy="${yVerifiedRel + verifyRowH / 2}" r="${
-            logoW / 2 + 2
-          }" fill="#fff" opacity="0.9"/>
-      <image href="${esc(logoDataUrl)}" x="1" y="${
-            yVerifiedRel + (verifyRowH - logoW) / 2
-          }" width="${logoW}" height="${logoW}" />
-      <text x="${logoW + 10}" y="${
-            yVerifiedRel + verifyRowH / 2
-          }" dominant-baseline="middle"
-            font-size="${verFont}" font-weight="700" fill="${txtWhite}">${esc(
-            status
-          )}</text>
-      `
-        : `
-      <circle cx="12" cy="${
-        yVerifiedRel + verifyRowH / 2
-      }" r="12" fill="${verifiedGreen}"/>
-      <path d="M6,${
-        yVerifiedRel + verifyRowH / 2
-      } l4,4 l8,-8" stroke="#fff" stroke-width="3" fill="none"
-            stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="28" y="${
-        yVerifiedRel + verifyRowH / 2
-      }" dominant-baseline="middle"
-            font-size="${verFont}" font-weight="700" fill="${txtWhite}">${esc(
-            status
-          )}</text>
-      `
-    }
-  </g>
+  <!-- Address Text - Bottom Right -->
+  ${addressSVG}
 </svg>`;
 }
 
-// ===================== ImageService =====================
+// ===================== IMAGE SERVICE CLASS =====================
 class ImageService {
   /**
-   * @param {Buffer} imageBuffer
-   * @param {string} [addressReq] // alamat override (jika diisi)
-   * @param {Object} [opts]
-   * @param {string} [opts.align]    // 'left' | 'right'
-   * @param {number} [opts.panelWidthPct] // 0.6..0.8 (opsional)
-   * @param {number} [opts.maxAddressLines] // default 3
-   * @param {string} [opts.logoDataUrl] // data:image/png;base64,...
-   * @param {number} [opts.logoSizePx] // default 50
+   * Load logo from public folder and convert to data URL
+   * @returns {Promise<string|null>} Logo data URL or null if not found
+   */
+  async loadLogoDataUrl() {
+    try {
+      // Cari logo di folder public dengan berbagai ekstensi
+      const publicDir = path.join(__dirname, "../../public");
+      const logoFiles = ["logo.png", "logo.jpg", "logo.jpeg", "logo.webp", "logo.svg"];
+      
+      for (const logoFile of logoFiles) {
+        const logoPath = path.join(publicDir, logoFile);
+        try {
+          const logoBuffer = await fs.readFile(logoPath);
+          const ext = path.extname(logoFile).substring(1);
+          const mimeType = ext === "svg" ? "image/svg+xml" : `image/${ext}`;
+          const base64 = logoBuffer.toString("base64");
+          return `data:${mimeType};base64,${base64}`;
+        } catch (err) {
+          // File tidak ditemukan, coba yang lain
+          continue;
+        }
+      }
+      
+      return null; // Tidak ada logo ditemukan
+    } catch (error) {
+      console.warn("Failed to load logo:", error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Add watermark to image with customizable options
+   * NEW DESIGN: Logo top-right, timestamp & address bottom-right
+   * 
+   * @param {Buffer} imageBuffer - Input image buffer
+   * @param {string} [addressReq] - Address override (optional)
+   * @param {Object} [opts] - Customization options (mostly ignored now)
+   * @returns {Promise<Buffer>} Processed image buffer
    */
   async addWatermark(imageBuffer, addressReq, opts = {}) {
     try {
+      // Load and validate image
       const image = sharp(imageBuffer, { failOn: "none" });
       const metadata = await image.metadata();
 
@@ -268,62 +382,74 @@ class ImageService {
       }
 
       const { width, height, format } = metadata;
+      
+      // Validate format
       const supportedFormats = new Set(["jpeg", "jpg", "png", "webp"]);
-      const fmt = format === "jpg" ? "jpeg" : format;
-      if (!supportedFormats.has(fmt)) {
+      const normalizedFormat = format === "jpg" ? "jpeg" : format;
+      
+      if (!supportedFormats.has(normalizedFormat)) {
         throw new AppError("Unsupported image format", 400);
       }
 
-      // Generate timestamp + address
-      const timestamp = moment.tz("Asia/Jakarta").format("DD MMM YYYY HH:mm:ss");
-      // const addressCfg = config?.watermark?.address || "Lokasi tidak tersedia";
+      // Generate timestamp (Asia/Jakarta timezone)
+      const timestamp = moment
+        .tz("Asia/Jakarta")
+        .format("DD MMM YYYY HH:mm:ss");
+
+      // Use provided address or fallback
       const address = addressReq || "Lokasi tidak tersedia";
 
-      // Panel width (opsional %)
-      const panelWidthPx =
-        typeof opts.panelWidthPct === "number"
-          ? Math.round(width * Math.min(0.9, Math.max(0.3, opts.panelWidthPct)))
-          : Math.round(width * 0.68);
+      // Load logo dari public folder jika tidak disediakan
+      let logoDataUrl = opts.logoDataUrl;
+      if (!logoDataUrl) {
+        logoDataUrl = await this.loadLogoDataUrl();
+      }
 
-      // Build SVG overlay (ukuran persis image; anchor bottom-left)
-      const svg = buildWatermarkSVGAdvanced({
+      // Merge theme with config defaults
+      const themeOverrides = {
+        ...opts.theme,
+      };
+
+      // Build SVG watermark overlay - NEW PROFESSIONAL DESIGN
+      const svg = buildWatermarkSVG({
         width,
         height,
         timestamp,
         address,
-        status: "Verified",
-        align: opts.align === "right" ? "right" : "left",
-        panelWidthPx,
         maxAddressLines: Number.isInteger(opts.maxAddressLines)
           ? opts.maxAddressLines
-          : 3,
-        logoDataUrl: opts.logoDataUrl || null,
-        logoSizePx: opts.logoSizePx || 42,
-        theme: {
-          outerPad: config?.watermark?.padding ?? 24,
-          textColor: config?.watermark?.textColor || "#FFFFFF",
-          panelBg: config?.watermark?.backgroundColor || "rgba(0,0,0,0.01)",
-          fontStack: config?.watermark?.fontFamily || undefined,
-        },
+          : 5,
+        logoDataUrl: logoDataUrl,
+        theme: themeOverrides,
       });
 
-      // Composite tanpa mengubah resolusi
+      // Composite watermark onto image
       let pipeline = image.composite([
         { input: Buffer.from(svg), top: 0, left: 0 },
       ]);
 
-      // Pertahankan format output sesuai input
-      if (fmt === "jpeg")
+      // Preserve output format with high quality
+      if (normalizedFormat === "jpeg") {
         pipeline = pipeline.jpeg({
           quality: 95,
           progressive: true,
           mozjpeg: false,
         });
-      if (fmt === "png") pipeline = pipeline.png({ compressionLevel: 9 });
-      if (fmt === "webp") pipeline = pipeline.webp({ quality: 95 });
+      } else if (normalizedFormat === "png") {
+        pipeline = pipeline.png({ 
+          compressionLevel: 9,
+          quality: 95
+        });
+      } else if (normalizedFormat === "webp") {
+        pipeline = pipeline.webp({ 
+          quality: 95,
+          lossless: false
+        });
+      }
 
       const processedImage = await pipeline.toBuffer();
       return processedImage;
+      
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -332,31 +458,11 @@ class ImageService {
     }
   }
 
-  // (Opsional) helper jika kamu masih butuh
-  generateWatermarkText() {
-    const now = moment.tz("Asia/Jakarta");
-    const date = now.format("DD/MM/YYYY");
-    const time = now.format("HH:mm:ss");
-    const address = config?.watermark?.address || "Lokasi tidak tersedia";
-    // Tidak dipakai di versi advanced (kita pakai multi-line)
-    return `${date} ${time} ${address} Verified`;
-    // Biarkan tetap ada jika kamu ingin fallback.
-  }
-
-  calculateFontSize(imageWidth) {
-    // Tidak lagi dipakai langsung; ukuran dinamis di builder
-    const baseFontSize = config?.watermark?.baseFontSize ?? 24; // untuk compat
-    const baseWidth = 1920;
-    let fontSize = (imageWidth / baseWidth) * baseFontSize;
-    fontSize = Math.max(12, Math.min(fontSize, 48));
-    return Math.floor(fontSize);
-  }
-
-  createWatermarkSvg() {
-    // Tidak digunakan lagi; digantikan buildWatermarkSVGAdvanced
-    return "";
-  }
-
+  /**
+   * Validate image buffer and get metadata
+   * @param {Buffer} buffer - Image buffer to validate
+   * @returns {Promise<Object>} Image metadata
+   */
   async validateImageBuffer(buffer) {
     try {
       const metadata = await sharp(buffer, { failOn: "none" }).metadata();
@@ -374,6 +480,30 @@ class ImageService {
     } catch (error) {
       throw new Error(`Image validation failed: ${error.message}`);
     }
+  }
+
+  /**
+   * Generate watermark text (legacy method for compatibility)
+   * @deprecated Use buildWatermarkSVG instead
+   */
+  generateWatermarkText() {
+    const now = moment.tz("Asia/Jakarta");
+    const date = now.format("DD/MM/YYYY");
+    const time = now.format("HH:mm:ss");
+    const address = config?.watermark?.address || "Lokasi tidak tersedia";
+    return `${date} ${time} ${address} Verified`;
+  }
+
+  /**
+   * Calculate font size based on image width (legacy method)
+   * @deprecated Font sizes are now calculated dynamically in buildWatermarkSVG
+   */
+  calculateFontSize(imageWidth) {
+    const baseFontSize = config?.watermark?.baseFontSize ?? 24;
+    const baseWidth = 1920;
+    let fontSize = (imageWidth / baseWidth) * baseFontSize;
+    fontSize = Math.max(12, Math.min(fontSize, 48));
+    return Math.floor(fontSize);
   }
 }
 
