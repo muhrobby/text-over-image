@@ -9,7 +9,7 @@ services:
     environment:
       # Server Configuration
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: 3000
+      PORT: 3001
 
       # Security
       REQUIRE_AUTH: ${REQUIRE_AUTH:-true}
