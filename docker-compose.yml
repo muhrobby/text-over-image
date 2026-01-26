@@ -43,3 +43,8 @@ services:
         reservations:
           cpus: "0.5"
           memory: 256M
+    networks:
+      - prod_net
+networks:
+  prod_net:
+    external: true
