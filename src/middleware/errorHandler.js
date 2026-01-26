@@ -10,15 +10,22 @@ const errorHandler = (err, req, res, next) => {
   let error = { ...err };
   error.message = err.message;
 
-  // Log error for debugging
-  console.error("Error:", {
+  // Log error for debugging (but sanitize sensitive data)
+  const logData = {
     message: err.message,
-    stack: err.stack,
     url: req.url,
     method: req.method,
     ip: req.ip,
     userAgent: req.get("User-Agent"),
-  });
+    timestamp: new Date().toISOString()
+  };
+  
+  // Only log stack in development
+  if (process.env.NODE_ENV === "development") {
+    logData.stack = err.stack;
+  }
+  
+  console.error("Error:", logData);
 
   // Mongoose bad ObjectId
   if (err.name === "CastError") {

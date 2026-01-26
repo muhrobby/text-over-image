@@ -113,6 +113,7 @@
 
         input[type="text"],
         input[type="file"],
+        input[type="datetime-local"],
         select,
         textarea {
             width: 100%;
@@ -128,6 +129,22 @@
         textarea:focus {
             outline: none;
             border-color: var(--primary);
+        }
+
+        /* Datetime input styling */
+        input[type="datetime-local"] {
+            font-family: inherit;
+            color: var(--dark);
+        }
+
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            filter: opacity(0.6);
+            transition: filter 0.2s;
+        }
+
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+            filter: opacity(1);
         }
 
         textarea {
@@ -463,6 +480,19 @@
                             <small style="color: var(--gray);">Leave empty to use default address</small>
                         </div>
 
+                        <div class="form-group">
+                            <label for="fileTimeCreated">
+                                Custom Date & Time (Optional)
+                                <span style="color: var(--gray); font-weight: 400; font-size: 0.9rem;">- Default: Current time</span>
+                            </label>
+                            <input 
+                                type="datetime-local" 
+                                id="fileTimeCreated"
+                                style="cursor: pointer;"
+                            >
+                            <small style="color: var(--gray);">Leave empty to use current date & time</small>
+                        </div>
+
                         <button type="submit" class="btn btn-primary">
                             <span>✨ Add Watermark</span>
                         </button>
@@ -512,6 +542,19 @@
                             <small style="color: var(--gray);">Leave empty to use default address</small>
                         </div>
 
+                        <div class="form-group">
+                            <label for="urlTimeCreated">
+                                Custom Date & Time (Optional)
+                                <span style="color: var(--gray); font-weight: 400; font-size: 0.9rem;">- Default: Current time</span>
+                            </label>
+                            <input 
+                                type="datetime-local" 
+                                id="urlTimeCreated"
+                                style="cursor: pointer;"
+                            >
+                            <small style="color: var(--gray);">Leave empty to use current date & time</small>
+                        </div>
+
                         <button type="submit" class="btn btn-primary">
                             <span>✨ Add Watermark</span>
                         </button>
@@ -553,15 +596,17 @@
                         
                         <p style="margin-top: 1rem; font-weight: 600;">Request (multipart/form-data):</p>
                         <pre>{
-  "image": File,           // Image file (required)
-  "address": String,       // Custom address (optional)
-  "format": "binary|json"  // Response format (optional, default: binary)
+  "image": File,                    // Image file (required)
+  "address": String,                // Custom address (optional)
+  "time_created": ISO8601 DateTime, // Custom timestamp (optional)
+  "format": "binary|json"           // Response format (optional, default: binary)
 }</pre>
                         
                         <p style="margin-top: 1rem; font-weight: 600;">cURL Example:</p>
                         <pre>curl -X POST http://localhost:3000/upload \
   -F "image=@photo.jpg" \
   -F "address=Jl. Sudirman No. 123, Jakarta" \
+  -F "time_created=2024-01-15T14:30:00+07:00" \
   -o watermarked.jpg</pre>
                     </div>
 
@@ -577,6 +622,7 @@
                         <pre>{
   "url": "https://example.com/image.jpg",  // Image URL (required)
   "address": "Custom address",              // Custom address (optional)
+  "time_created": "2024-01-15T14:30:00Z",   // Custom timestamp (optional, ISO 8601)
   "format": "binary"                        // Response format (optional)
 }</pre>
                         
@@ -586,6 +632,7 @@
   -d '{
     "url": "https://example.com/image.jpg",
     "address": "Jl. Sudirman, Jakarta",
+    "time_created": "2024-01-15T14:30:00+07:00",
     "format": "json"
   }'</pre>
                     </div>
@@ -708,6 +755,7 @@ X-Processed-Size: 1234567</pre>
             const formData = new FormData();
             const fileInput = document.getElementById('fileInput');
             const address = document.getElementById('fileAddress').value;
+            const timeCreated = document.getElementById('fileTimeCreated').value;
             
             if (!fileInput.files[0]) {
                 showAlert('file', 'danger', 'Please select an image file');
@@ -716,6 +764,12 @@ X-Processed-Size: 1234567</pre>
 
             formData.append('image', fileInput.files[0]);
             if (address) formData.append('address', address);
+            if (timeCreated) {
+                // Convert datetime-local to ISO 8601 with timezone
+                const dateObj = new Date(timeCreated);
+                const iso8601 = dateObj.toISOString();
+                formData.append('time_created', iso8601);
+            }
             formData.append('format', 'json');
 
             hideAlert('file');
@@ -750,6 +804,7 @@ X-Processed-Size: 1234567</pre>
             
             const url = document.getElementById('urlInput').value;
             const address = document.getElementById('urlAddress').value;
+            const timeCreated = document.getElementById('urlTimeCreated').value;
             
             if (!url) {
                 showAlert('url', 'danger', 'Please enter an image URL');
@@ -760,17 +815,26 @@ X-Processed-Size: 1234567</pre>
             document.getElementById('urlResult').classList.remove('show');
             document.getElementById('urlLoading').classList.add('show');
 
+            const requestBody = {
+                url: url,
+                format: 'json'
+            };
+            
+            if (address) requestBody.address = address;
+            if (timeCreated) {
+                // Convert datetime-local to ISO 8601 with timezone
+                const dateObj = new Date(timeCreated);
+                const iso8601 = dateObj.toISOString();
+                requestBody.time_created = iso8601;
+            }
+
             try {
                 const response = await fetch('/upload-url', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        url: url,
-                        address: address || undefined,
-                        format: 'json'
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 const data = await response.json();

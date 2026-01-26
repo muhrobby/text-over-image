@@ -368,7 +368,11 @@ class ImageService {
    * 
    * @param {Buffer} imageBuffer - Input image buffer
    * @param {string} [addressReq] - Address override (optional)
-   * @param {Object} [opts] - Customization options (mostly ignored now)
+   * @param {Object} [opts] - Customization options
+   * @param {string} [opts.timeCreated] - Custom timestamp (ISO 8601 format, optional)
+   * @param {string} [opts.logoDataUrl] - Custom logo data URL (optional)
+   * @param {Object} [opts.theme] - Theme overrides (optional)
+   * @param {number} [opts.maxAddressLines] - Max lines for address (optional)
    * @returns {Promise<Buffer>} Processed image buffer
    */
   async addWatermark(imageBuffer, addressReq, opts = {}) {
@@ -391,13 +395,51 @@ class ImageService {
         throw new AppError("Unsupported image format", 400);
       }
 
-      // Generate timestamp (Asia/Jakarta timezone)
-      const timestamp = moment
-        .tz("Asia/Jakarta")
-        .format("DD MMM YYYY HH:mm:ss");
+      // Generate or use custom timestamp
+      let timestamp;
+      if (opts.timeCreated) {
+        // Sanitize: Only accept string input
+        if (typeof opts.timeCreated !== 'string') {
+          throw new AppError("Invalid time_created type. Must be a string in ISO 8601 format", 400);
+        }
+        
+        // Parse custom timestamp (ISO 8601 format only)
+        try {
+          const customMoment = moment(opts.timeCreated, moment.ISO_8601, true).tz("Asia/Jakarta");
+          if (!customMoment.isValid()) {
+            throw new Error("Invalid date format");
+          }
+          
+          // Security: Validate year range to prevent unrealistic dates
+          const year = customMoment.year();
+          if (year < 1900 || year > 2100) {
+            throw new Error("Year must be between 1900 and 2100");
+          }
+          
+          timestamp = customMoment.format("DD MMM YYYY HH:mm:ss");
+        } catch (err) {
+          throw new AppError("Invalid time_created format. Please use ISO 8601 format (e.g., 2024-01-15T14:30:00+07:00)", 400);
+        }
+      } else {
+        // Default: current time in Asia/Jakarta timezone
+        timestamp = moment
+          .tz("Asia/Jakarta")
+          .format("DD MMM YYYY HH:mm:ss");
+      }
 
       // Use provided address or fallback
-      const address = addressReq || "Lokasi tidak tersedia";
+      // Security: Sanitize address to prevent XSS (already escaped in escapeXml but double-check)
+      let address = addressReq || "Lokasi tidak tersedia";
+      
+      // Remove potential script tags and dangerous characters
+      if (typeof address === 'string') {
+        address = address.trim();
+        // Max length already validated in middleware (500 chars)
+        // Additional sanitization: remove null bytes and control characters
+        address = address.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+      } else {
+        address = "Lokasi tidak tersedia";
+      }
 
       // Load logo dari public folder jika tidak disediakan
       let logoDataUrl = opts.logoDataUrl;

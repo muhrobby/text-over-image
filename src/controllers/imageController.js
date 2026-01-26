@@ -2,7 +2,7 @@ const axios = require("axios");
 const sharp = require("sharp");
 const imageService = require("../services/imageService");
 const { ApiResponse } = require("../utils/response");
-const { AppError } = require("../utils/errors");
+const { AppError, sanitizeString } = require("../utils/errors");
 const config = require("../config/config");
 
 class ImageController {
@@ -14,12 +14,17 @@ class ImageController {
 
       const { format = "binary" } = req.query;
       const imageBuffer = req.file.buffer;
-      const { address } = req.body;
+      const { address, time_created } = req.body;
 
-      // Process image with watermark
+      // Sanitize inputs untuk prevent XSS/injection
+      const sanitizedAddress = address ? sanitizeString(address, 500) : undefined;
+      const sanitizedTimeCreated = time_created ? sanitizeString(time_created, 50) : undefined;
+
+      // Process image with watermark (with optional custom timestamp)
       const processedImage = await imageService.addWatermark(
         imageBuffer,
-        address
+        sanitizedAddress,
+        { timeCreated: sanitizedTimeCreated }
       );
       const meta = await sharp(processedImage).metadata();
       const outFormat = meta.format || "jpeg";
@@ -54,11 +59,15 @@ class ImageController {
 
   async uploadFromUrl(req, res, next) {
     try {
-      const { url, format = "binary", address } = req.body;
+      const { url, format = "binary", address, time_created } = req.body;
 
       if (!url) {
         throw new AppError("Image URL is required", 400);
       }
+
+      // Sanitize inputs untuk prevent XSS/injection
+      const sanitizedAddress = address ? sanitizeString(address, 500) : undefined;
+      const sanitizedTimeCreated = time_created ? sanitizeString(time_created, 50) : undefined;
 
       // Download image from URL
       const response = await axios.get(url, {
@@ -90,10 +99,11 @@ class ImageController {
         );
       }
 
-      // Process image with watermark (dengan address)
+      // Process image with watermark (with optional address and custom timestamp)
       const processedImage = await imageService.addWatermark(
         imageBuffer,
-        address
+        sanitizedAddress,
+        { timeCreated: sanitizedTimeCreated }
       );
       const meta = await sharp(processedImage).metadata();
       const outFormat = meta.format || "jpeg";

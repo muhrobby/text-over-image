@@ -7,6 +7,9 @@ const schemas = {
   fileUpload: Joi.object({
     format: Joi.string().valid("binary", "json").optional(),
     address: Joi.string().max(500).optional(),
+    time_created: Joi.date().iso().optional().messages({
+      "date.format": "time_created must be a valid ISO 8601 date/time",
+    }),
   }),
 
   urlUpload: Joi.object({
@@ -16,6 +19,9 @@ const schemas = {
     }),
     address: Joi.string().max(500).optional(),
     format: Joi.string().valid("binary", "json").optional(),
+    time_created: Joi.date().iso().optional().messages({
+      "date.format": "time_created must be a valid ISO 8601 date/time",
+    }),
   }),
 };
 
@@ -27,13 +33,22 @@ const validateFileUpload = (req, res, next) => {
       throw new AppError(queryError.details[0].message, 400);
     }
     
-    // Validate body parameters (address)
-    const addressSchema = Joi.object({
-      address: Joi.string().max(200).optional(),
+    // Validate body parameters (address and time_created)
+    const bodySchema = Joi.object({
+      address: Joi.string().max(500).optional(),
+      time_created: Joi.string().optional(), // Accept as string from multipart form, will be validated later
     });
-    const { error: bodyError } = addressSchema.validate(req.body);
+    const { error: bodyError } = bodySchema.validate(req.body);
     if (bodyError) {
       throw new AppError(bodyError.details[0].message, 400);
+    }
+    
+    // Validate time_created format if provided
+    if (req.body.time_created) {
+      const timeValidation = Joi.date().iso().validate(req.body.time_created);
+      if (timeValidation.error) {
+        throw new AppError("time_created must be a valid ISO 8601 date/time (e.g., 2024-01-15T14:30:00+07:00)", 400);
+      }
     }
 
     // Check if file exists

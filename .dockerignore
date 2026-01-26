@@ -1,11 +1,52 @@
+# Dependencies
 node_modules
 npm-debug.log
+package-lock.json
+
+# Environment & Config
+.env
+.env.local
+.env.*.local
+
+# Docker files
 Dockerfile*
 docker-compose*.yml
+
+# Git
 .git
 .gitignore
+.gitattributes
+
+# IDE
 .vscode
-.env
+.idea
+*.swp
+*.swo
+*~
+
+# Testing
 **/*.test.js
 coverage
+.nyc_output
+
+# Logs
+logs
+*.log
+
+# Temporary files
 tmp
+temp
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation (build-time)
+README.md
+*.md
+docs/
+
+# CI/CD
+.github
+.gitlab-ci.yml

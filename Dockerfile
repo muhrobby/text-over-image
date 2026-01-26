@@ -1,47 +1,73 @@
 # syntax=docker/dockerfile:1
-# --- STAGE 1: builder ---
+
+# ============================================
+# STAGE 1: Dependencies Builder
+# ============================================
 FROM node:20-bookworm-slim AS builder
+
 ENV NODE_ENV=production
 WORKDIR /app
 
-# 1) deps dulu agar cache optimal
+# Install dependencies first (better caching)
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --only=production && npm cache clean --force
 
-# 2) salin source
+# Copy application source
 COPY . .
-# (opsional) kalau pakai TypeScript:
-# RUN npm run build
 
-# --- STAGE 2: runtime ---
+# ============================================
+# STAGE 2: Production Runtime
+# ============================================
 FROM node:20-bookworm-slim AS runtime
 
-# butuh curl untuk healthcheck; tzdata untuk TZ Asia/Jakarta
+# Install system dependencies for Sharp and fonts
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl tzdata tini fontconfig \
-    fonts-dejavu-core fonts-dejavu-extra \
+    # Sharp dependencies
+    libvips42 \
+    # Utilities
+    curl \
+    tzdata \
+    tini \
+    # Fonts for text rendering
+    fontconfig \
+    fonts-dejavu-core \
+    fonts-dejavu-extra \
     fonts-liberation2 \
-    fonts-noto fonts-noto-color-emoji fonts-noto-cjk \
- && rm -rf /var/lib/apt/lists/*
+    fonts-noto \
+    fonts-noto-color-emoji \
+    fonts-noto-cjk \
+ && rm -rf /var/lib/apt/lists/* \
+ && fc-cache -fv
 
+# Environment configuration
 ENV NODE_ENV=production \
-    PORT=3002 \
+    PORT=3000 \
     TZ=Asia/Jakarta
 
 WORKDIR /app
 
-# ambil node_modules dari builder + source runtime
+# Copy node_modules and application from builder
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app ./
-# kalau pakai TypeScript dan build ke dist:
-# COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/.env.example ./
 
-# user non-root
+# Create non-root user and set permissions
+RUN chown -R node:node /app
+
+# Switch to non-root user for security
 USER node
 
-EXPOSE 3002
+# Expose port
+EXPOSE 3000
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+# Use tini for proper signal handling
 ENTRYPOINT ["/usr/bin/tini", "--"]
-# kalau pakai dist:
-# CMD ["node", "dist/server.js"]
+
+# Start application
 CMD ["node", "src/server.js"]

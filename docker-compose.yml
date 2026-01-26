@@ -1,19 +1,51 @@
+version: '3.8'
+
 services:
   textoverimage:
     build:
-      context: ./app # <- pakai Dockerfile yg ada di repo
+      context: .
       dockerfile: Dockerfile
-    container_name: text-over-image
+    container_name: text-over-image-api
     restart: unless-stopped
+    
     environment:
-      NODE_ENV: ${NODE_ENV}
-      PORT: ${PORT}
-      CORS_ORIGIN: ${CORS_ORIGIN}
+      # Server Configuration
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3000}
+      
+      # Security
+      REQUIRE_AUTH: ${REQUIRE_AUTH:-true}
+      API_TOKEN: ${API_TOKEN}
+      
+      # CORS
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      
+      # Watermark
+      WATERMARK_ADDRESS: ${WATERMARK_ADDRESS:-Jakarta, Indonesia}
+    
+    # Port mapping (adjust left side if needed)
+    ports:
+      - "3000:3000"
+    
+    # Health check
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:3002/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
+      start_period: 40s
       retries: 3
+    
+    # Resource limits (optional, adjust based on needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Traefik labels for reverse proxy (if using Traefik)
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik-proxy
@@ -21,18 +53,21 @@ services:
       - traefik.http.routers.toi.entrypoints=websecure
       - traefik.http.routers.toi.tls=true
       - traefik.http.routers.toi.tls.certresolver=cf
-      - traefik.http.services.toi.loadbalancer.server.port=3002
-
+      - traefik.http.services.toi.loadbalancer.server.port=3000
+      
+      # Security headers middleware
       - traefik.http.routers.toi.middlewares=toi-header,toi-rl
       - traefik.http.middlewares.toi-header.headers.stsSeconds=31536000
       - traefik.http.middlewares.toi-header.headers.stsIncludeSubdomains=true
       - traefik.http.middlewares.toi-header.headers.stsPreload=true
       - traefik.http.middlewares.toi-header.headers.frameDeny=true
       - traefik.http.middlewares.toi-header.headers.contentTypeNosniff=true
-      - traefik.http.middlewares.toi-header.headers.referrerPolicy=no-referrer-when-downgrade
-
-      - traefik.http.middlewares.toi-rl.ratelimit.average=120
-      - traefik.http.middlewares.toi-rl.ratelimit.burst=240
+      - traefik.http.middlewares.toi-header.headers.referrerPolicy=strict-origin-when-cross-origin
+      
+      # Rate limiting (Traefik level)
+      - traefik.http.middlewares.toi-rl.ratelimit.average=100
+      - traefik.http.middlewares.toi-rl.ratelimit.burst=150
+    
     networks:
       - traefik-proxy
 
