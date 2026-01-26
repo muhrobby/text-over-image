@@ -9,7 +9,7 @@ services:
     environment:
       # Server Configuration
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: ${PORT}
+      PORT: 3000
 
       # Security
       REQUIRE_AUTH: ${REQUIRE_AUTH:-true}
@@ -21,9 +21,10 @@ services:
       # Watermark
       WATERMARK_ADDRESS: ${WATERMARK_ADDRESS:-Jakarta, Indonesia}
 
-    # Port mapping (adjust left side if needed)
+    # Port mapping
+    # Change 3001 to any available port on host if needed
     ports:
-      - "3000:3000"
+      - "3001:3000"
 
     # Health check
     healthcheck:
@@ -42,10 +43,3 @@ services:
         reservations:
           cpus: "0.5"
           memory: 256M
-
-    networks:
-      - prod_net
-
-networks:
-  prod_net:
-    external: true
