@@ -144,8 +144,12 @@ paths:
                 time_created:
                   type: string
                   format: date-time
-                  description: Custom timestamp in ISO 8601 format (optional)
-                  example: "2024-12-25T14:30:00+07:00"
+                  description: |
+                    Custom timestamp (optional). Supports multiple formats:
+                    - ISO 8601: 2024-12-25T14:30:00+07:00
+                    - SQL/MySQL: 2024-12-25 14:30:00
+                    - Indonesian: 25/12/2024 14:30:00
+                  example: "2024-12-25 14:30:00"
                 format:
                   type: string
                   enum: [binary, json]
@@ -230,8 +234,12 @@ paths:
                 time_created:
                   type: string
                   format: date-time
-                  description: Custom timestamp in ISO 8601 format (optional)
-                  example: "2024-12-25T14:30:00+07:00"
+                  description: |
+                    Custom timestamp (optional). Supports multiple formats:
+                    - ISO 8601: 2024-12-25T14:30:00+07:00
+                    - SQL/MySQL: 2024-12-25 14:30:00
+                    - Indonesian: 25/12/2024 14:30:00
+                  example: "2024-12-25 14:30:00"
                 format:
                   type: string
                   enum: [binary, json]
@@ -239,7 +247,14 @@ paths:
                   description: Response format
             examples:
               withCustomTime:
-                summary: With custom timestamp
+                summary: With custom timestamp (SQL format)
+                value:
+                  url: "https://example.com/photo.jpg"
+                  address: "Jakarta, Indonesia"
+                  time_created: "2024-12-25 14:30:00"
+                  format: "json"
+              withISO8601:
+                summary: With ISO 8601 timestamp
                 value:
                   url: "https://example.com/photo.jpg"
                   address: "Jakarta, Indonesia"

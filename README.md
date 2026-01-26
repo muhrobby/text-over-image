@@ -162,7 +162,10 @@ Upload image file with optional custom timestamp and address.
 ```
 image         (file, required)   - JPG/PNG/WebP, max 10MB
 address       (string, optional) - Custom address (max 500 chars)
-time_created  (string, optional) - ISO 8601 datetime (e.g., 2024-12-25T14:30:00+07:00)
+time_created  (string, optional) - Custom timestamp in multiple formats:
+                                   • ISO 8601: 2024-12-25T14:30:00+07:00
+                                   • SQL/MySQL: 2024-12-25 14:30:00
+                                   • Indonesian: 25/12/2024 14:30:00
 format        (string, optional) - Response format: "binary" (default) or "json"
 ```
 
@@ -181,10 +184,15 @@ Download image from URL and add watermark.
 {
   "url": "https://example.com/image.jpg",
   "address": "Jakarta, Indonesia",
-  "time_created": "2024-12-25T14:30:00+07:00",
+  "time_created": "2024-12-25 14:30:00",
   "format": "binary"
 }
 ```
+
+**Supported `time_created` formats**:
+- `2024-12-25 14:30:00` (SQL/MySQL - recommended)
+- `2024-12-25T14:30:00+07:00` (ISO 8601 with timezone)
+- `25/12/2024 14:30:00` (Indonesian format)
 
 ### `GET /health` - Health Check
 
@@ -320,7 +328,7 @@ curl -X POST http://localhost:3000/upload \
   -H "Authorization: Bearer your-token" \
   -F "image=@photo.jpg" \
   -F "address=Jl. Sudirman No. 123, Jakarta Selatan, DKI Jakarta" \
-  -F "time_created=2024-12-25T14:30:00+07:00" \
+  -F "time_created=2024-12-25 14:30:00" \
   -o result.jpg
 
 # Upload from URL (JSON response)
@@ -330,7 +338,7 @@ curl -X POST http://localhost:3000/upload-url \
   -d '{
     "url": "https://example.com/image.jpg",
     "address": "Jakarta, Indonesia",
-    "time_created": "2024-12-25T14:30:00+07:00",
+    "time_created": "2024-12-25 14:30:00",
     "format": "json"
   }'
 ```

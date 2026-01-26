@@ -400,13 +400,32 @@ class ImageService {
       if (opts.timeCreated) {
         // Sanitize: Only accept string input
         if (typeof opts.timeCreated !== 'string') {
-          throw new AppError("Invalid time_created type. Must be a string in ISO 8601 format", 400);
+          throw new AppError("Invalid time_created type. Must be a string", 400);
         }
         
-        // Parse custom timestamp (ISO 8601 format only)
+        // Parse custom timestamp with multiple formats support
         try {
-          const customMoment = moment(opts.timeCreated, moment.ISO_8601, true).tz("Asia/Jakarta");
-          if (!customMoment.isValid()) {
+          let customMoment;
+          
+          // Try parsing with multiple formats
+          const formats = [
+            moment.ISO_8601,                    // ISO 8601: 2026-01-21T12:27:30+07:00
+            'YYYY-MM-DD HH:mm:ss',              // SQL/MySQL: 2026-01-21 12:27:30
+            'YYYY-MM-DDTHH:mm:ss',              // ISO without timezone: 2026-01-21T12:27:30
+            'DD/MM/YYYY HH:mm:ss',              // Indonesian: 21/01/2026 12:27:30
+            'DD-MM-YYYY HH:mm:ss',              // Alternative: 21-01-2026 12:27:30
+          ];
+          
+          // Try each format
+          for (const format of formats) {
+            customMoment = moment.tz(opts.timeCreated, format, "Asia/Jakarta");
+            if (customMoment.isValid()) {
+              break;
+            }
+          }
+          
+          // If still invalid, throw error
+          if (!customMoment || !customMoment.isValid()) {
             throw new Error("Invalid date format");
           }
           
@@ -418,7 +437,12 @@ class ImageService {
           
           timestamp = customMoment.format("DD MMM YYYY HH:mm:ss");
         } catch (err) {
-          throw new AppError("Invalid time_created format. Please use ISO 8601 format (e.g., 2024-01-15T14:30:00+07:00)", 400);
+          throw new AppError(
+            `Invalid time_created format: "${opts.timeCreated}". Supported formats: ` +
+            `ISO 8601 (2026-01-21T12:27:30+07:00), SQL (2026-01-21 12:27:30), ` +
+            `Indonesian (21/01/2026 12:27:30)`,
+            400
+          );
         }
       } else {
         // Default: current time in Asia/Jakarta timezone
