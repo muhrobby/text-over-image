@@ -39,7 +39,7 @@ services:
           cpus: "0.5"
           memory: 256M
     networks:
-      - prod_net
+      - dokploy-network
 networks:
-  prod_net:
+  dokploy-network:
     external: true
