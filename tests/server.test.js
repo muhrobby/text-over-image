@@ -1,4 +1,5 @@
 const request = require("supertest");
+const vercelConfig = require("../vercel.json");
 
 describe("server startup", () => {
   beforeEach(() => {
@@ -23,5 +24,13 @@ describe("server startup", () => {
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.data).toHaveProperty("version");
+  });
+
+  it("routes root Vercel requests through the Express adapter", () => {
+    expect(vercelConfig.rewrites).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: "/(.*)", destination: "/api" }),
+      ])
+    );
   });
 });
