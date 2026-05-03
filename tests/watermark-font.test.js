@@ -43,7 +43,7 @@ describe("watermark font rendering", () => {
     );
   });
 
-  it("renders visible white text with black stroke near the bottom-right", async () => {
+  it("renders visible white text with black stroke near the bottom-left", async () => {
     const imageService = require("../src/services/imageService");
 
     await imageService.addWatermark(Buffer.from("image"), "Jakarta, Indonesia");
@@ -54,7 +54,8 @@ describe("watermark font rendering", () => {
     expect(textOverlays.length).toBeGreaterThanOrEqual(4);
     expect(textOverlays[0].input.text.text).toContain("foreground=\"#000000\"");
     expect(textOverlays[8].input.text.text).toContain("foreground=\"#FFFFFF\"");
-    expect(textOverlays[8].left).toBeGreaterThanOrEqual(300);
+    expect(textOverlays[8].input.text.align).toBe("left");
+    expect(textOverlays[8].left).toBeLessThanOrEqual(40);
     expect(textOverlays[8].top).toBeGreaterThanOrEqual(600);
   });
 });

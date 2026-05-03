@@ -412,8 +412,7 @@ function buildSharpTextOverlays({
   const fonts = calculateFontSizes(width);
   const maxWidth = width * 0.70;
   const textWidth = Math.round(maxWidth);
-  const rightX = width - outerPad;
-  const left = Math.max(0, Math.round(rightX - maxWidth));
+  const left = outerPad;
 
   let addressLines = wrapTextByWords(
     (address || "Lokasi tidak tersedia").toString(),
@@ -447,7 +446,7 @@ function buildSharpTextOverlays({
         font: `Inter ${fontSize}`,
         fontfile,
         width: textWidth,
-        align: "right",
+        align: "left",
         rgba: true,
       },
     },
