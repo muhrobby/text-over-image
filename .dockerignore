@@ -7,6 +7,13 @@ npm-debug.log
 .env
 .env.local
 .env.*.local
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+credentials.json
+service-account*.json
 
 # Docker files
 Dockerfile*
@@ -28,6 +35,7 @@ docker-compose*.yml
 **/*.test.js
 coverage
 .nyc_output
+jest.config.*
 
 # Logs
 logs
@@ -50,3 +58,10 @@ docs/
 # CI/CD
 .github
 .gitlab-ci.yml
+
+# Deployment/cache artifacts
+.vercel
+.next
+dist
+build
+.cache

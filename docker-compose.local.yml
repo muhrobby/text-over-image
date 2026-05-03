@@ -1,0 +1,13 @@
+services:
+  textoverimage:
+    ports:
+      - "${HOST_PORT:-3000}:${PORT:-3000}"
+    networks:
+      - local-network
+
+networks:
+  dokploy-network:
+    external: false
+    name: text-over-image-local-unused
+  local-network:
+    name: text-over-image-local

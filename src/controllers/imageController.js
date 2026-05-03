@@ -1,9 +1,10 @@
-const axios = require("axios");
 const sharp = require("sharp");
 const imageService = require("../services/imageService");
 const { ApiResponse } = require("../utils/response");
 const { AppError, sanitizeString } = require("../utils/errors");
 const config = require("../config/config");
+const { fetchImageFromUrl } = require("../services/urlFetchService");
+const { version } = require("../../package.json");
 
 class ImageController {
   async uploadFile(req, res, next) {
@@ -69,27 +70,8 @@ class ImageController {
       const sanitizedAddress = address ? sanitizeString(address, 500) : undefined;
       const sanitizedTimeCreated = time_created ? sanitizeString(time_created, 50) : undefined;
 
-      // Download image from URL
-      const response = await axios.get(url, {
-        responseType: "arraybuffer",
-        timeout: config.axios.timeout,
-        maxContentLength: config.axios.maxContentLength,
-        maxBodyLength: config.axios.maxBodyLength,
-        headers: {
-          "User-Agent": "Text-Over-Image-API/1.0",
-        },
-      });
-
-      // Validate content type
-      const contentType = response.headers["content-type"];
-      if (!config.upload.allowedMimeTypes.includes(contentType)) {
-        throw new AppError(
-          "Invalid image format from URL. Only JPG, PNG, and WebP are allowed.",
-          400
-        );
-      }
-
-      const imageBuffer = Buffer.from(response.data);
+      const fetchedImage = await fetchImageFromUrl(url);
+      const imageBuffer = fetchedImage.buffer;
 
       // Check file size
       if (imageBuffer.length > config.upload.maxFileSizeBytes) {
@@ -119,7 +101,6 @@ class ImageController {
             image: `data:image/${outFormat};base64,${base64}`,
             size: processedImage.length,
             originalSize: imageBuffer.length,
-            sourceUrl: url,
           }
         );
 
@@ -132,7 +113,6 @@ class ImageController {
           "Content-Disposition": `inline; filename="watermarked-image.${ext}"`,
           "X-Original-Size": imageBuffer.length,
           "X-Processed-Size": processedImage.length,
-          "X-Source-URL": url,
         });
 
         return res.send(processedImage);
@@ -142,11 +122,15 @@ class ImageController {
         next(
           new AppError("Unable to download image from the provided URL", 400)
         );
-      } else if (error.code === "ETIMEDOUT") {
-        next(new AppError("Request timeout while downloading image", 408));
-      } else {
-        next(error);
+        return;
       }
+
+      if (error.code === "ETIMEDOUT") {
+        next(new AppError("Request timeout while downloading image", 408));
+        return;
+      }
+
+      next(error);
     }
   }
 
@@ -162,59 +146,61 @@ class ImageController {
   }
 
   async getDocumentation(req, res) {
-    const docs = {
-      title: "Text Over Image API",
-      version: "1.0.0",
-      description: "API untuk menambahkan watermark otomatis pada gambar",
-      baseUrl: `${req.protocol}://${req.get("host")}`,
-      endpoints: {
-        "POST /upload": {
-          description: "Upload gambar dari file lokal",
-          parameters: {
-            image: "File gambar (multipart/form-data)",
+      const docs = {
+        title: "Text Over Image API",
+        version,
+        description: "API untuk menambahkan watermark otomatis pada gambar",
+        baseUrl: `${req.protocol}://${req.get("host")}`,
+        endpoints: {
+          "POST /upload": {
+            description: "Upload gambar dari file lokal",
+            parameters: {
+              image: "File gambar (multipart/form-data)",
             format: "Response format: 'binary' (default) atau 'json'",
           },
           example:
             "curl -X POST -F 'image=@photo.jpg' -F 'format=json' /upload",
         },
-        "POST /upload-url": {
-          description: "Upload gambar dari URL",
-          parameters: {
-            url: "URL gambar (JSON)",
-            format: "Response format: 'binary' (default) atau 'json'",
+          "POST /upload-url": {
+            description: "Upload gambar dari URL",
+            parameters: {
+              url: "URL gambar publik HTTP/HTTPS (private/local diblokir)",
+              format: "Response format: 'binary' (default) atau 'json'",
           },
           example: {
             url: "https://example.com/image.jpg",
             format: "json",
           },
         },
-        "GET /health": {
-          description: "Health check endpoint",
+          "GET /health": {
+            description: "Health check endpoint",
+          },
+          "GET /api-docs": {
+            description: "Swagger UI public untuk dokumentasi OpenAPI",
+            authentication: "No authentication required",
+          },
         },
-      },
-      features: [
-        "Watermark otomatis dengan tanggal, jam, dan alamat",
-        "Support JPG, PNG, WebP",
-        "Rate limiting: 100 request per 15 menit",
-        "File size limit: 10MB",
-        "Tidak menyimpan file di server",
-        "Response binary atau JSON base64",
-      ],
-      watermark: {
-        position: "bottom-left",
-        format: "Multi-line format with automatic text wrapping",
-        structure: [
-          "DD/MM/YYYY HH:mm:ss (Date & Time)",
-          "[Address] (Auto-wrapped if long)",
-          "Verified ✓ (with green check icon)",
+        features: [
+          "Watermark otomatis dengan tanggal, jam, dan alamat",
+          "Support JPG, PNG, WebP",
+          "Rate limiting: 100 request per 15 menit",
+          "File size limit: 10MB",
+          "Tidak menyimpan file di server",
+          "Response binary atau JSON base64",
         ],
-        example: `${new Date().toLocaleDateString(
-          "id-ID"
-        )} ${new Date().toLocaleTimeString("id-ID")}
-${config.watermark.address}
-Verified ✓`,
-      },
-    };
+        watermark: {
+          position: "bottom-left",
+          format: "Multi-line format with automatic text wrapping",
+          structure: [
+            "DD/MM/YYYY HH:mm:ss (Date & Time)",
+            "[Address] (Auto-wrapped if long)",
+          ],
+          example: `${new Date().toLocaleDateString(
+            "id-ID"
+          )} ${new Date().toLocaleTimeString("id-ID")}
+${config.watermark.address}`,
+        },
+      };
 
     res.json(docs);
   }

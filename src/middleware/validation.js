@@ -13,7 +13,7 @@ const schemas = {
   }),
 
   urlUpload: Joi.object({
-    url: Joi.string().uri().required().messages({
+    url: Joi.string().uri({ scheme: ["http", "https"] }).required().messages({
       "string.uri": "Please provide a valid image URL",
       "any.required": "Image URL is required",
     }),
@@ -77,31 +77,7 @@ const validateUrlUpload = (req, res, next) => {
     // Additional URL validation
     const url = value.url;
 
-    // Check if URL is from a valid domain (basic security check)
-    try {
-      const urlObj = new URL(url);
-      const protocol = urlObj.protocol;
-
-      if (!["http:", "https:"].includes(protocol)) {
-        throw new AppError("Only HTTP and HTTPS URLs are allowed", 400);
-      }
-
-      // Check for suspicious domains or IPs
-      const hostname = urlObj.hostname.toLowerCase();
-      const suspiciousPatterns = ["localhost", "127.0.0.1", "0.0.0.0", "::1"];
-
-      if (suspiciousPatterns.some((pattern) => hostname.includes(pattern))) {
-        throw new AppError(
-          "Local URLs are not allowed for security reasons",
-          400
-        );
-      }
-    } catch (urlError) {
-      if (urlError instanceof AppError) {
-        throw urlError;
-      }
-      throw new AppError("Invalid URL format", 400);
-    }
+    // URL safety checks are handled in urlFetchService before any outbound request.
 
     req.body = value;
     next();
@@ -110,21 +86,8 @@ const validateUrlUpload = (req, res, next) => {
   }
 };
 
-// Generic validation middleware
-const validate = (schema) => {
-  return (req, res, next) => {
-    const { error, value } = schema.validate(req.body);
-    if (error) {
-      return next(new AppError(error.details[0].message, 400));
-    }
-    req.body = value;
-    next();
-  };
-};
-
 module.exports = {
   validateFileUpload,
   validateUrlUpload,
-  validate,
   schemas,
 };

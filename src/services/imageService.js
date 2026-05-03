@@ -116,6 +116,52 @@ function escapeXml(s = "") {
     .replace(/'/g, "&apos;");
 }
 
+// ===================== FONT LOADING UTILITIES =====================
+const fontCache = {};
+
+function getMimeType(ext) {
+  const types = {
+    ttf: "font/truetype",
+    otf: "font/opentype",
+    woff: "font/woff",
+    woff2: "font/woff2",
+  };
+  return types[ext.toLowerCase()] || "application/octet-stream";
+}
+
+async function loadFontDataUrl(fontPath) {
+  if (!fontPath) return null;
+
+  if (fontCache[fontPath]) {
+    return fontCache[fontPath];
+  }
+
+  try {
+    const fullPath = path.resolve(fontPath);
+    const buffer = await fs.readFile(fullPath);
+    const ext = path.extname(fullPath).substring(1);
+    const mimeType = getMimeType(ext);
+    const base64 = buffer.toString("base64");
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+    fontCache[fontPath] = dataUrl;
+    return dataUrl;
+  } catch (err) {
+    console.warn(`Failed to load font from ${fontPath}:`, err.message);
+    return null;
+  }
+}
+
+function buildFontFaceCSS(fontFamily, fontDataUrl, fontWeight = "normal", fontStyle = "normal") {
+  if (!fontDataUrl) return "";
+  return `
+    @font-face {
+      font-family: '${fontFamily}';
+      src: url('${fontDataUrl}');
+      font-weight: ${fontWeight};
+      font-style: ${fontStyle};
+    }`;
+}
+
 // ===================== DYNAMIC TYPOGRAPHY CALCULATOR =====================
 /**
  * Calculate responsive font sizes based on image width
@@ -226,6 +272,8 @@ function buildWatermarkSVG({
   maxAddressLines = 5,
   logoDataUrl = null,
   theme = {},
+  fontFaceCSS = "",
+  fontFamilyName = null,
 }) {
   // Merge theme dengan default
   const finalTheme = { ...DEFAULT_THEME, ...theme };
@@ -305,12 +353,14 @@ function buildWatermarkSVG({
   });
 
   // Compose final SVG
+  const effectiveFontStack = fontFamilyName || fontStack;
   return `
 <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <style>
-      text { 
-        font-family: ${fontStack}; 
+      ${fontFaceCSS}
+      text {
+        font-family: ${effectiveFontStack};
         user-select: none;
         -webkit-font-smoothing: antialiased;
         text-rendering: optimizeLegibility;
@@ -386,7 +436,15 @@ class ImageService {
       }
 
       const { width, height, format } = metadata;
-      
+
+      const pixelCount = width * height;
+      if (pixelCount > config.upload.maxImagePixels) {
+        throw new AppError(
+          `Image dimensions too large. Maximum allowed is ${Math.round(config.upload.maxImagePixels / 1000000)} megapixels (${width}x${height} = ${Math.round(pixelCount / 1000000)}MP)`,
+          400
+        );
+      }
+
       // Validate format
       const supportedFormats = new Set(["jpeg", "jpg", "png", "webp"]);
       const normalizedFormat = format === "jpg" ? "jpeg" : format;
@@ -471,6 +529,24 @@ class ImageService {
         logoDataUrl = await this.loadLogoDataUrl();
       }
 
+      // Load embedded fonts if configured (for Vercel/cloud deployments)
+      let fontFaceCSS = "";
+      let fontFamilyName = null;
+      const cfgRegular = config.watermark.fontRegular;
+      const cfgSemibold = config.watermark.fontSemibold;
+
+      if (cfgRegular || cfgSemibold) {
+        const regularData = await loadFontDataUrl(cfgRegular);
+        const semiboldData = await loadFontDataUrl(cfgSemibold);
+
+        if (regularData || semiboldData) {
+          fontFamilyName = "WatermarkFont";
+          fontFaceCSS =
+            buildFontFaceCSS("WatermarkFont", regularData, "normal", "normal") +
+            buildFontFaceCSS("WatermarkFont", semiboldData, "600", "normal");
+        }
+      }
+
       // Merge theme with config defaults
       const themeOverrides = {
         ...opts.theme,
@@ -487,6 +563,8 @@ class ImageService {
           : 5,
         logoDataUrl: logoDataUrl,
         theme: themeOverrides,
+        fontFaceCSS,
+        fontFamilyName,
       });
 
       // Composite watermark onto image
@@ -524,53 +602,6 @@ class ImageService {
     }
   }
 
-  /**
-   * Validate image buffer and get metadata
-   * @param {Buffer} buffer - Image buffer to validate
-   * @returns {Promise<Object>} Image metadata
-   */
-  async validateImageBuffer(buffer) {
-    try {
-      const metadata = await sharp(buffer, { failOn: "none" }).metadata();
-
-      if (!metadata || !metadata.width || !metadata.height) {
-        throw new Error("Invalid image file");
-      }
-
-      const supportedFormats = ["jpeg", "jpg", "png", "webp"];
-      if (!supportedFormats.includes(metadata.format)) {
-        throw new Error("Unsupported image format");
-      }
-
-      return metadata;
-    } catch (error) {
-      throw new Error(`Image validation failed: ${error.message}`);
-    }
-  }
-
-  /**
-   * Generate watermark text (legacy method for compatibility)
-   * @deprecated Use buildWatermarkSVG instead
-   */
-  generateWatermarkText() {
-    const now = moment.tz("Asia/Jakarta");
-    const date = now.format("DD/MM/YYYY");
-    const time = now.format("HH:mm:ss");
-    const address = config?.watermark?.address || "Lokasi tidak tersedia";
-    return `${date} ${time} ${address} Verified`;
-  }
-
-  /**
-   * Calculate font size based on image width (legacy method)
-   * @deprecated Font sizes are now calculated dynamically in buildWatermarkSVG
-   */
-  calculateFontSize(imageWidth) {
-    const baseFontSize = config?.watermark?.baseFontSize ?? 24;
-    const baseWidth = 1920;
-    let fontSize = (imageWidth / baseWidth) * baseFontSize;
-    fontSize = Math.max(12, Math.min(fontSize, 48));
-    return Math.floor(fontSize);
-  }
 }
 
 module.exports = new ImageService();

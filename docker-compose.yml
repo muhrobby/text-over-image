@@ -9,25 +9,31 @@ services:
     environment:
       # Server Configuration
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: 3001
+      PORT: ${PORT:-3000}
 
       # Security
       REQUIRE_AUTH: ${REQUIRE_AUTH:-true}
       API_TOKEN: ${API_TOKEN}
 
       # CORS
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://yourdomain.com}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      ALLOW_WILDCARD_CORS: ${ALLOW_WILDCARD_CORS:-false}
+      ALLOW_HTTP_IMAGES: ${ALLOW_HTTP_IMAGES:-false}
 
       # Watermark
       WATERMARK_ADDRESS: ${WATERMARK_ADDRESS:-Jakarta, Indonesia}
 
     # Health check
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:3001/health"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:$${PORT:-3000}/health"]
       interval: 30s
       timeout: 10s
       start_period: 40s
       retries: 3
+
+    # Dokploy/reverse-proxy deployment uses the external network below and does
+    # not publish host ports. Use docker-compose.local.yml for direct local access.
 
     # Resource limits (optional, adjust based on needs)
     deploy:

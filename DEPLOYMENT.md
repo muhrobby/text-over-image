@@ -1,6 +1,6 @@
 # 🚀 Deployment Guide
 
-Panduan lengkap untuk deploy **Text Over Image API** ke production menggunakan Docker.
+Panduan deploy **Text Over Image API** ke production. Target utama yang direkomendasikan adalah Docker/Dokploy karena image membawa paket font OS yang dibutuhkan Sharp/SVG untuk watermark konsisten.
 
 ---
 
@@ -14,6 +14,8 @@ Panduan lengkap untuk deploy **Text Over Image API** ke production menggunakan D
 ---
 
 ## 🐳 Deploy dengan Docker Compose
+
+Default `docker-compose.yml` ditujukan untuk Dokploy/reverse proxy: service masuk ke external network `dokploy-network` dan tidak mem-publish port host. Untuk development lokal langsung dari host, gunakan override `docker-compose.local.yml`.
 
 ### 1. Clone Repository
 
@@ -49,6 +51,9 @@ API_TOKEN=paste-your-generated-token-here
 # ==========================================
 # For single domain
 CORS_ORIGIN=https://yourdomain.com
+TRUST_PROXY=1
+ALLOW_WILDCARD_CORS=false
+ALLOW_HTTP_IMAGES=false
 
 # For multiple domains (uncomment and modify)
 # CORS_ORIGIN=https://domain1.com,https://domain2.com
@@ -66,8 +71,11 @@ EOF
 ### 3. Build dan Start Container
 
 ```bash
-# Build image dan start container
+# Dokploy/reverse-proxy mode
 docker compose up -d --build
+
+# Local host access mode: http://localhost:3000
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 
 # Check logs
 docker compose logs -f
@@ -79,7 +87,7 @@ docker compose ps
 ### 4. Verify Deployment
 
 ```bash
-# Health check
+# Health check for local host access mode
 curl http://localhost:3000/health
 
 # Test API (replace YOUR_TOKEN)
@@ -99,16 +107,53 @@ File `docker-compose.yml` sudah dikonfigurasi dengan:
 - ✅ **Health check** setiap 30 detik
 - ✅ **Auto restart** jika container crash
 - ✅ **Resource limits** (2 CPU, 1GB RAM max)
-- ✅ **Port mapping** 3000:3000
+- ✅ **External network** `dokploy-network` untuk Dokploy/reverse proxy
+- ✅ **Internal port** konsisten memakai `PORT` dan default `3000`
 
-### Customize Port
+### Local Port Mapping
 
-Edit `docker-compose.yml` bagian ports:
+Gunakan override lokal, jangan ubah compose production:
 
-```yaml
-ports:
-  - "8080:3000"  # Akses via port 8080 di host
+```bash
+HOST_PORT=8080 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
+
+Container tetap memakai internal `PORT=3000`; host akan expose ke `http://localhost:8080`.
+
+### Dokploy Network
+
+Pastikan network external tersedia di host Dokploy:
+
+```bash
+docker network create dokploy-network
+```
+
+Jika Dokploy memakai nama network berbeda, sesuaikan bagian `networks` di `docker-compose.yml`.
+
+### Vercel Deployment Note
+
+Vercel pernah gagal menghasilkan watermark yang sama karena runtime tidak selalu membawa font OS seperti Docker image. Dockerfile menginstall `fontconfig`, DejaVu, Liberation, Noto, Noto CJK, dan Noto Color Emoji agar rendering teks lebih konsisten.
+
+Jika deploy ke Vercel, font harus dibundel:
+
+**1. Buat folder `public/fonts/` di root project** dan isi dengan file `.ttf`/`.otf`:
+
+```
+public/fonts/
+├── Inter-Regular.ttf
+└── Inter-SemiBold.ttf
+```
+
+**2. Set environment variables di project Vercel:**
+
+```
+WATERMARK_FONT_REGULAR=public/fonts/Inter-Regular.ttf
+WATERMARK_FONT_SEMIBOLD=public/fonts/Inter-SemiBold.ttf
+```
+
+**3. Deploy seperti biasa.**
+
+Font akan di-embed sebagai base64 `@font-face` di dalam SVG watermark, sehingga rendering tidak bergantung pada font OS runtime. Untuk hasil paling konsisten dengan emoji dan karakter non-Latin (Cina, Jepang, Arab), gunakan Docker/Dokploy.
 
 ### Customize Resource Limits
 

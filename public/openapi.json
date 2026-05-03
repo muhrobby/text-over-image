@@ -41,8 +41,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT",
-        "description": "API token authentication. Get your token from environment variable API_TOKEN."
+        "description": "Static API token authentication. Send the token in the Authorization header as Bearer <API_TOKEN>."
       }
     },
     "schemas": {
@@ -247,7 +246,7 @@
           "Upload"
         ],
         "summary": "Upload image from URL with custom timestamp",
-        "description": "Download an image from a URL and add professional watermark with customizable timestamp.\n\n**Authentication Required**: Bearer token in Authorization header\n\nNote: Local URLs (localhost, 127.0.0.1) are blocked for security (SSRF protection).\n",
+        "description": "Download an image from a URL and add professional watermark with customizable timestamp.\n\n**Authentication Required**: Bearer token in Authorization header\n\nNote: Only public HTTP/HTTPS URLs are accepted. Local, private, and metadata targets are blocked for security (SSRF protection).\n",
         "operationId": "uploadFromUrl",
         "security": [
           {

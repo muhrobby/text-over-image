@@ -95,7 +95,7 @@ curl -X POST http://localhost:3000/upload \
 
 ## 🔐 Authentication
 
-All API endpoints (except `/health` and `/api`) require Bearer token authentication.
+All API endpoints (except `/health`, `/api`, and the public `/api-docs` Swagger UI) require Bearer token authentication.
 
 ### Setup
 
@@ -121,10 +121,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 Authorization: Bearer your-api-token
 ```
 
-**Query Parameter (Fallback)**:
-```bash
-?token=your-api-token
-```
+Query parameter authentication is no longer supported.
 
 ### Example Requests
 
@@ -178,6 +175,8 @@ X-Processed-Size: 1456789     (bytes)
 ### `POST /upload-url` - Upload from URL
 
 Download image from URL and add watermark.
+
+Only public HTTP/HTTPS URLs are accepted. Local, private, and metadata targets are blocked by the service.
 
 **Request (application/json)**:
 ```json
@@ -236,7 +235,18 @@ API_TOKEN=your-secret-token-here
 # ==========================================
 # CORS CONFIGURATION
 # ==========================================
-CORS_ORIGIN=https://yourdomain.com  # Use * for all origins
+CORS_ORIGIN=https://yourdomain.com  # Use * in production only with ALLOW_WILDCARD_CORS=true
+
+# ==========================================
+# TRUST PROXY CONFIGURATION
+# ==========================================
+TRUST_PROXY=1
+
+# ==========================================
+# OPTIONAL SECURITY OVERRIDES
+# ==========================================
+ALLOW_WILDCARD_CORS=false
+ALLOW_HTTP_IMAGES=false
 
 # ==========================================
 # WATERMARK CONFIGURATION
@@ -246,7 +256,35 @@ WATERMARK_ADDRESS=Your Company, Your City
 
 ### Add Brand Logo
 
-Place your logo in `public/` folder:
+ Place your logo in `public/` folder:
+
+ Logo will auto-load and display in top-right corner (15% of image width, 150-500px).
+
+---
+
+## 🔤 Custom Fonts
+
+By default the watermark uses system fonts available in the runtime. For **Vercel or other cloud deployments** where OS fonts may be missing, bundle your font files and configure the service to use them:
+
+**1. Add font files to `public/fonts/`** (create the folder if it does not exist):
+
+```
+public/
+└── fonts/
+    ├── Inter-Regular.ttf
+    └── Inter-SemiBold.ttf
+```
+
+**2. Set environment variables:**
+
+```env
+WATERMARK_FONT_REGULAR=public/fonts/Inter-Regular.ttf
+WATERMARK_FONT_SEMIBOLD=public/fonts/Inter-SemiBold.ttf
+```
+
+**3. Rebuild/restart the service.**
+
+When these variables are set, the fonts are embedded directly into the SVG watermark as base64 `@font-face` declarations, ensuring consistent rendering regardless of the runtime environment. Docker deployments continue to work with or without these variables since they rely on OS font packages.
 ```bash
 # Supported formats
 public/logo.png
@@ -267,7 +305,7 @@ Logo will auto-load and display in top-right corner (15% of image width, 150-500
 # Build image
 docker build -t text-over-image-api .
 
-# Run container
+# Run container with the same internal port used by Dockerfile
 docker run -d \
   -p 3000:3000 \
   -e REQUIRE_AUTH=true \
@@ -279,36 +317,39 @@ docker run -d \
 
 ### Docker Compose
 
-```yaml
-version: '3.8'
-services:
-  api:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - REQUIRE_AUTH=true
-      - API_TOKEN=${API_TOKEN}
-      - CORS_ORIGIN=https://yourdomain.com
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+The default `docker-compose.yml` is for Dokploy or another trusted reverse proxy. It joins the external `dokploy-network` and does not publish a host port.
+
+```bash
+# Dokploy/reverse-proxy mode
+docker compose up -d --build
+
+# Local mode with direct host access at http://localhost:3000
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
-### Dockploy Deployment
+`docker-compose.local.yml` only adds local port publishing and a local Docker network. Keep production deployments on the default compose file unless your reverse proxy requires a different network name.
 
-1. **Connect Repository** to Dockploy
+If you intentionally need all browser origins, for example during a broad Vercel rollout, set `CORS_ORIGIN=*` together with `ALLOW_WILDCARD_CORS=true`. Do not expose the static `API_TOKEN` in public frontend code.
+
+### Dokploy Deployment
+
+1. **Connect Repository** to Dokploy
 2. **Set Environment Variables**:
    - `REQUIRE_AUTH=true`
    - `API_TOKEN=<generate-secure-token>`
    - `NODE_ENV=production`
-3. **Deploy** - Dockploy will auto-build using Dockerfile
-4. **Add Custom Domain** (optional)
-5. **Enable HTTPS** via Dockploy SSL
+   - `CORS_ORIGIN=https://yourdomain.com`
+   - `TRUST_PROXY=1`
+3. **Ensure external network** `dokploy-network` exists in the Dokploy host
+4. **Deploy** - Dokploy will auto-build using Dockerfile
+5. **Add Custom Domain** (optional)
+6. **Enable HTTPS** via Dokploy SSL
+
+### Vercel Considerations
+
+Docker/Dokploy is the preferred production target for consistent watermark rendering because the image includes `fontconfig`, DejaVu, Liberation, Noto, Noto CJK, and Noto Color Emoji fonts. Vercel deployments may run without the same OS font packages, so text metrics and emoji/CJK rendering can differ or fall back unexpectedly.
+
+If deploying to Vercel, verify generated watermark output manually with your production text set. For exact typography, either keep the API on Docker/Dokploy or package and reference bundled fonts explicitly in the SVG rendering path.
 
 ---
 

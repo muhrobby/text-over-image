@@ -50,8 +50,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
-      description: API token authentication. Get your token from environment variable API_TOKEN.
+      description: Static API token authentication. Send the token in the Authorization header as Bearer <API_TOKEN>.
   
   schemas:
     ImageResponse:
@@ -208,7 +207,7 @@ paths:
         
         **Authentication Required**: Bearer token in Authorization header
         
-        Note: Local URLs (localhost, 127.0.0.1) are blocked for security (SSRF protection).
+        Note: Only public HTTP/HTTPS URLs are accepted. Local, private, and metadata targets are blocked for security (SSRF protection).
       operationId: uploadFromUrl
       security:
         - bearerAuth: []
