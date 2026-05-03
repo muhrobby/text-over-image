@@ -130,30 +130,74 @@ docker network create dokploy-network
 
 Jika Dokploy memakai nama network berbeda, sesuaikan bagian `networks` di `docker-compose.yml`.
 
-### Vercel Deployment Note
+---
 
-Vercel pernah gagal menghasilkan watermark yang sama karena runtime tidak selalu membawa font OS seperti Docker image. Dockerfile menginstall `fontconfig`, DejaVu, Liberation, Noto, Noto CJK, dan Noto Color Emoji agar rendering teks lebih konsisten.
+## ☁️ Deploy ke Vercel
 
-Jika deploy ke Vercel, font harus dibundel:
+### 1. Push Kode ke Git
 
-**1. Buat folder `public/fonts/` di root project** dan isi dengan file `.ttf`/`.otf`:
+Pastikan `api/index.js` dan `vercel.json` sudah di-commit:
 
+```bash
+git add api/index.js vercel.json
+git commit -m "feat: add Vercel serverless adapter"
+git push origin main
 ```
-public/fonts/
-├── Inter-Regular.ttf
-└── Inter-SemiBold.ttf
+
+### 2. Connect Repository ke Vercel
+
+1. Buka [vercel.com](https://vercel.com) dan login
+2. Klik **Add New → Project**
+3. Select repository `text-over-image`
+4. Klik **Deploy**
+
+### 3. Configure Environment Variables
+
+Di Vercel Dashboard → **Settings → Environment Variables**, tambahkan:
+
+| Name | Value | Notes |
+|------|-------|-------|
+| `NODE_ENV` | `production` | Wajib |
+| `REQUIRE_AUTH` | `true` | Aktifkan authentication |
+| `API_TOKEN` | Hasil `openssl rand -hex 32` | Token API yang secure |
+| `CORS_ORIGIN` | `https://your-app.vercel.app` | URL deployment Vercel |
+| `TRUST_PROXY` | `0` | Vercel handles proxy internally |
+| `PORT` | `3000` | Optional |
+
+Klik **Save** dan redeploy.
+
+### 4. Verifikasi Deployment
+
+```bash
+# Health check
+curl https://your-app.vercel.app/health
+
+# Test upload dengan auth
+curl -X POST https://your-app.vercel.app/upload \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -F "image=@test.jpg" \
+  --output result.jpg
 ```
 
-**2. Set environment variables di project Vercel:**
+### Font di Vercel
 
+Vercel serverless functions mungkin tidak memiliki font OS yang komprehensif. Untuk rendering watermark yang konsisten dengan karakter non-Latin (CJK, Arabic, Emoji):
+
+**1. Tambahkan font ke `public/fonts/`:**
+```bash
+mkdir -p public/fonts
+# Tambahkan file .ttf/.otf
+```
+
+**2. Set environment variables:**
 ```
 WATERMARK_FONT_REGULAR=public/fonts/Inter-Regular.ttf
 WATERMARK_FONT_SEMIBOLD=public/fonts/Inter-SemiBold.ttf
 ```
 
-**3. Deploy seperti biasa.**
+Font akan di-embed sebagai base64 `@font-face` di dalam SVG watermark. Untuk hasil paling konsisten dengan emoji dan karakter non-Latin, pertimbangkan Docker/Dokploy deployment sebagai gantinya.
 
-Font akan di-embed sebagai base64 `@font-face` di dalam SVG watermark, sehingga rendering tidak bergantung pada font OS runtime. Untuk hasil paling konsisten dengan emoji dan karakter non-Latin (Cina, Jepang, Arab), gunakan Docker/Dokploy.
+---
 
 ### Customize Resource Limits
 

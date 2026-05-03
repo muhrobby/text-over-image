@@ -13,6 +13,7 @@ describe("production config hardening", () => {
   });
 
   it("rejects wildcard CORS in production unless explicitly allowed", () => {
+    jest.doMock("dotenv", () => ({ config: jest.fn() }));
     process.env.NODE_ENV = "production";
     process.env.REQUIRE_AUTH = "false";
     process.env.API_TOKEN = "test-token";

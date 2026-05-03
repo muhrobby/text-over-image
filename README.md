@@ -297,6 +297,71 @@ Logo will auto-load and display in top-right corner (15% of image width, 150-500
 
 ---
 
+---
+
+## ☁️ Deploy to Vercel
+
+### Prerequisites
+
+- [Vercel account](https://vercel.com) connected to your Git repository
+- Vercel CLI (optional): `npm i -g vercel`
+
+### 1. Configure Environment Variables
+
+In your Vercel project dashboard, go to **Settings → Environment Variables** and add:
+
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `NODE_ENV` | `production` | Required |
+| `REQUIRE_AUTH` | `true` | Enable authentication |
+| `API_TOKEN` | (generate with `openssl rand -hex 32`) | Your secret API token |
+| `CORS_ORIGIN` | `https://your-app.vercel.app` | Your Vercel deployment URL |
+| `TRUST_PROXY` | `0` | Vercel handles proxy internally |
+| `PORT` | `3000` | Optional, Vercel sets this |
+
+### 2. Deploy
+
+```bash
+# Option 1: Via Vercel Dashboard
+# Push to Git and connect repository to Vercel project
+
+# Option 2: Via CLI
+vercel --prod
+```
+
+### 3. Verify Deployment
+
+```bash
+# Health check (no auth required)
+curl https://your-app.vercel.app/health
+
+# Test authenticated endpoint
+curl -X POST https://your-app.vercel.app/upload \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -F "image=@photo.jpg" \
+  --output result.jpg
+```
+
+### Font Considerations for Vercel
+
+Vercel serverless functions may not have OS fonts installed. For consistent watermark rendering with non-Latin characters (CJK, Arabic, Emoji), bundle fonts:
+
+**1. Add font files to `public/fonts/`:**
+```bash
+mkdir -p public/fonts
+# Add Inter-Regular.ttf and Inter-SemiBold.ttf
+```
+
+**2. Set environment variables in Vercel:**
+```
+WATERMARK_FONT_REGULAR=public/fonts/Inter-Regular.ttf
+WATERMARK_FONT_SEMIBOLD=public/fonts/Inter-SemiBold.ttf
+```
+
+For best typography consistency across all characters, consider using Docker/Dokploy deployment instead, which includes comprehensive OS font packages.
+
+---
+
 ## 🐳 Docker Deployment
 
 ### Build and Run
@@ -347,9 +412,11 @@ If you intentionally need all browser origins, for example during a broad Vercel
 
 ### Vercel Considerations
 
-Docker/Dokploy is the preferred production target for consistent watermark rendering because the image includes `fontconfig`, DejaVu, Liberation, Noto, Noto CJK, and Noto Color Emoji fonts. Vercel deployments may run without the same OS font packages, so text metrics and emoji/CJK rendering can differ or fall back unexpectedly.
+Vercel deployments work via the `@vercel/node` runtime adapter. Note that Vercel serverless functions may not have OS fonts installed by default. For consistent watermark rendering with emoji and non-Latin characters (CJK, Arabic), bundle fonts via `WATERMARK_FONT_REGULAR` and `WATERMARK_FONT_SEMIBOLD` environment variables.
 
-If deploying to Vercel, verify generated watermark output manually with your production text set. For exact typography, either keep the API on Docker/Dokploy or package and reference bundled fonts explicitly in the SVG rendering path.
+Docker/Dokploy deployments include comprehensive OS font packages (`fontconfig`, DejaVu, Liberation, Noto, Noto CJK, Noto Color Emoji) for most consistent typography without additional configuration.
+
+For a dedicated **Deploy to Vercel** guide, see the [☁️ Deploy to Vercel](#️-deploy-to-vercel) section above.
 
 ---
 

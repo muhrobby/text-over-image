@@ -130,12 +130,12 @@ Catatan blueprint:
 - Tidak ada.
 
 **Kriteria selesai:**
-- [ ] Vercel config tidak lagi mengandalkan Docker sebagai satu-satunya jalur deploy.
-- [ ] Ada adapter Vercel di `api/index.js` yang menghubungkan runtime Vercel ke Express app existing.
-- [ ] `src/server.js` tetap aman untuk lokal dan tidak memulai listener permanen saat di-import oleh adapter.
-- [ ] Request ke endpoint utama tetap resolve dari root URL pada environment Vercel.
-- [ ] `npm start` lokal tetap bekerja seperti sebelumnya.
-- [ ] Tidak ada file runtime baru di luar `api/` tanpa alasan eksplisit.
+- [x] Vercel config tidak lagi mengandalkan Docker sebagai satu-satunya jalur deploy.
+- [x] Ada adapter Vercel di `api/index.js` yang menghubungkan runtime Vercel ke Express app existing.
+- [x] `src/server.js` tetap aman untuk lokal dan tidak memulai listener permanen saat di-import oleh adapter.
+- [x] Request ke endpoint utama tetap resolve dari root URL pada environment Vercel.
+- [x] `npm start` lokal tetap bekerja seperti sebelumnya.
+- [x] Tidak ada file runtime baru di luar `api/` tanpa alasan eksplisit.
 
 **Catatan keamanan:**
 - Jangan memindahkan auth, validation, atau SSRF logic ke adapter Vercel; adapter hanya boleh menjadi lapisan runtime.
@@ -162,13 +162,13 @@ Catatan blueprint:
 - Wajib setelah `TASK-001`.
 
 **Kriteria selesai:**
-- [ ] `.env.example` menjelaskan env minimum yang dibutuhkan untuk Vercel production tanpa ambigu.
-- [ ] `README.md` dan `DEPLOYMENT.md` menyebut jalur deploy Vercel secara eksplisit dan konsisten.
-- [ ] Dokumentasi auth menyatakan satu policy final yang sama dengan source code.
-- [ ] Jika `/api-docs` diputuskan public, dokumentasi menyatakannya jelas; jika diproteksi, test juga harus mencerminkan itu.
-- [ ] Test suite memverifikasi health check, route docs, dan satu jalur upload dasar tetap aman setelah perubahan deploy.
-- [ ] Test tidak bergantung pada network eksternal nyata.
-- [ ] Jalankan `npm test` dan pastikan semua test pass.
+- [x] `.env.example` menjelaskan env minimum yang dibutuhkan untuk Vercel production tanpa ambigu.
+- [x] `README.md` dan `DEPLOYMENT.md` menyebut jalur deploy Vercel secara eksplisit dan konsisten.
+- [x] Dokumentasi auth menyatakan satu policy final yang sama dengan source code.
+- [x] Jika `/api-docs` diputuskan public, dokumentasi menyatakannya jelas; jika diproteksi, test juga harus mencerminkan itu.
+- [x] Test suite memverifikasi health check, route docs, dan satu jalur upload dasar tetap aman setelah perubahan deploy.
+- [x] Test tidak bergantung pada network eksternal nyata.
+- [x] Jalankan `npm test` dan pastikan semua test pass.
 
 **Catatan keamanan:**
 - Jangan menuliskan token nyata atau contoh secret di dokumen atau test.

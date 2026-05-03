@@ -6,13 +6,17 @@ describe("auth behavior", () => {
   beforeEach(() => {
     jest.resetModules();
     process.env.NODE_ENV = "test";
+    delete process.env.REQUIRE_AUTH;
+    delete process.env.API_TOKEN;
   });
 
   afterEach(() => {
     process.env = { ...originalEnv };
+    jest.resetModules();
   });
 
   it("throws when auth is required but API_TOKEN is missing", () => {
+    jest.doMock("dotenv", () => ({ config: jest.fn() }));
     process.env.REQUIRE_AUTH = "true";
     delete process.env.API_TOKEN;
 
