@@ -47,6 +47,20 @@ describe("production config hardening", () => {
     expect(config.trustProxy).toBe(1);
   });
 
+  it("defaults to bundled watermark fonts for cloud runtimes", () => {
+    jest.doMock("dotenv", () => ({ config: jest.fn() }));
+    process.env.NODE_ENV = "test";
+    process.env.REQUIRE_AUTH = "false";
+    process.env.API_TOKEN = "test-token";
+    delete process.env.WATERMARK_FONT_REGULAR;
+    delete process.env.WATERMARK_FONT_SEMIBOLD;
+
+    const config = require("../src/config/config");
+
+    expect(config.watermark.fontRegular).toBe("public/fonts/Inter-Regular.ttf");
+    expect(config.watermark.fontSemibold).toBe("public/fonts/Inter-SemiBold.ttf");
+  });
+
   it("removes http image sources from CSP in production by default", async () => {
     process.env.NODE_ENV = "production";
     process.env.REQUIRE_AUTH = "false";

@@ -4,6 +4,8 @@ const isProduction = (process.env.NODE_ENV || "development") === "production";
 const corsOrigin = process.env.CORS_ORIGIN?.trim();
 const trustProxy = process.env.TRUST_PROXY?.trim();
 const allowWildcardCors = process.env.ALLOW_WILDCARD_CORS === "true";
+const defaultFontRegular = "public/fonts/Inter-Regular.ttf";
+const defaultFontSemibold = "public/fonts/Inter-SemiBold.ttf";
 
 function parseTrustProxy(value) {
   if (value == null || value === "") {
@@ -63,8 +65,8 @@ module.exports = {
     baseFontSize: 20,
     address: process.env.WATERMARK_ADDRESS || "Jakarta, Indonesia",
 
-    fontRegular: process.env.WATERMARK_FONT_REGULAR || null,
-    fontSemibold: process.env.WATERMARK_FONT_SEMIBOLD || null,
+    fontRegular: process.env.WATERMARK_FONT_REGULAR?.trim() || defaultFontRegular,
+    fontSemibold: process.env.WATERMARK_FONT_SEMIBOLD?.trim() || defaultFontSemibold,
 
     panelRadius: 18,
     stripeColor: "#FFCC33",
