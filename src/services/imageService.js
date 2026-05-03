@@ -440,10 +440,10 @@ function buildSharpTextOverlays({
   const timestampText = `${timestampParts.slice(0, 3).join(" ")} | ${timestampParts.slice(3).join(" ")}`;
   const overlays = [];
 
-  const makeTextOverlay = ({ text, top, fontSize, fontfile }) => ({
+  const makeTextOverlay = ({ text, top, fontSize, fontfile, color, offsetX = 0, offsetY = 0 }) => ({
     input: {
       text: {
-        text: escapeXml(text),
+        text: `<span foreground="${color}">${escapeXml(text)}</span>`,
         font: `Inter ${fontSize}`,
         fontfile,
         width: textWidth,
@@ -451,29 +451,63 @@ function buildSharpTextOverlays({
         rgba: true,
       },
     },
-    left,
-    top: Math.max(0, Math.round(top)),
+    left: Math.max(0, Math.round(left + offsetX)),
+    top: Math.max(0, Math.round(top + offsetY)),
   });
 
-  overlays.push(
-    makeTextOverlay({
+  const addVisibleText = ({ text, top, fontSize, fontfile }) => {
+    const strokeWidth = Math.max(2, Math.round(fontSize * 0.10));
+    const strokeOffsets = [
+      [-strokeWidth, -strokeWidth],
+      [0, -strokeWidth],
+      [strokeWidth, -strokeWidth],
+      [-strokeWidth, 0],
+      [strokeWidth, 0],
+      [-strokeWidth, strokeWidth],
+      [0, strokeWidth],
+      [strokeWidth, strokeWidth],
+    ];
+
+    strokeOffsets.forEach(([offsetX, offsetY]) => {
+      overlays.push(
+        makeTextOverlay({
+          text,
+          top,
+          fontSize,
+          fontfile,
+          color: finalTheme.strokeColor,
+          offsetX,
+          offsetY,
+        })
+      );
+    });
+
+    overlays.push(
+      makeTextOverlay({
+        text,
+        top,
+        fontSize,
+        fontfile,
+        color: finalTheme.textColor,
+      })
+    );
+  };
+
+  addVisibleText({
       text: timestampText,
       top: timestampY - fonts.time,
       fontSize: fonts.time,
       fontfile: semiboldFontFile || regularFontFile,
-    })
-  );
+  });
 
   addressLines.forEach((line, index) => {
     const lineY = addressStartY - totalAddressHeight + addressLineHeight + (index * addressLineHeight);
-    overlays.push(
-      makeTextOverlay({
+    addVisibleText({
         text: line,
         top: lineY - fonts.address,
         fontSize: fonts.address,
         fontfile: regularFontFile || semiboldFontFile,
-      })
-    );
+    });
   });
 
   return overlays;

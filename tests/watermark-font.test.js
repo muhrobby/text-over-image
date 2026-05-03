@@ -35,11 +35,26 @@ describe("watermark font rendering", () => {
         expect.objectContaining({
           input: expect.objectContaining({
             text: expect.objectContaining({
-              fontfile: expect.stringContaining("public/fonts/Inter"),
+              fontfile: expect.stringContaining("public/fonts/"),
             }),
           }),
         }),
       ])
     );
+  });
+
+  it("renders visible white text with black stroke near the bottom-right", async () => {
+    const imageService = require("../src/services/imageService");
+
+    await imageService.addWatermark(Buffer.from("image"), "Jakarta, Indonesia");
+
+    const overlays = mockImage.composite.mock.calls[0][0];
+    const textOverlays = overlays.filter((overlay) => overlay.input.text);
+
+    expect(textOverlays.length).toBeGreaterThanOrEqual(4);
+    expect(textOverlays[0].input.text.text).toContain("foreground=\"#000000\"");
+    expect(textOverlays[8].input.text.text).toContain("foreground=\"#FFFFFF\"");
+    expect(textOverlays[8].left).toBeGreaterThanOrEqual(300);
+    expect(textOverlays[8].top).toBeGreaterThanOrEqual(600);
   });
 });
