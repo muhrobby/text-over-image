@@ -151,6 +151,19 @@ async function loadFontDataUrl(fontPath) {
   }
 }
 
+async function resolveFontFilePath(fontPath) {
+  if (!fontPath) return null;
+
+  const fullPath = path.resolve(fontPath);
+  try {
+    await fs.access(fullPath);
+    return fullPath;
+  } catch (err) {
+    console.warn(`Failed to access font from ${fontPath}:`, err.message);
+    return null;
+  }
+}
+
 function buildFontFaceCSS(fontFamily, fontDataUrl, fontWeight = "normal", fontStyle = "normal") {
   if (!fontDataUrl) return "";
   return `
@@ -274,6 +287,7 @@ function buildWatermarkSVG({
   theme = {},
   fontFaceCSS = "",
   fontFamilyName = null,
+  renderText = true,
 }) {
   // Merge theme dengan default
   const finalTheme = { ...DEFAULT_THEME, ...theme };
@@ -335,22 +349,26 @@ function buildWatermarkSVG({
     opacity: logoOpacity
   });
 
-  const timestampSVG = buildTimestamp({
-    x: rightX,
-    y: timestampY,
-    timestamp,
-    fontSize: fonts.time,
-    theme: finalTheme
-  });
+  const timestampSVG = renderText
+    ? buildTimestamp({
+        x: rightX,
+        y: timestampY,
+        timestamp,
+        fontSize: fonts.time,
+        theme: finalTheme
+      })
+    : "";
 
-  const addressSVG = buildAddressText({
-    x: rightX,
-    y: addressStartY - totalAddressHeight + addressLineHeight,
-    lines: addressLines,
-    fontSize: fonts.address,
-    lineGap: addressLineHeight,
-    theme: finalTheme
-  });
+  const addressSVG = renderText
+    ? buildAddressText({
+        x: rightX,
+        y: addressStartY - totalAddressHeight + addressLineHeight,
+        lines: addressLines,
+        fontSize: fonts.address,
+        lineGap: addressLineHeight,
+        theme: finalTheme
+      })
+    : "";
 
   // Compose final SVG
   const effectiveFontStack = fontFamilyName || fontStack;
@@ -377,6 +395,88 @@ function buildWatermarkSVG({
   <!-- Address Text - Bottom Right -->
   ${addressSVG}
 </svg>`;
+}
+
+function buildSharpTextOverlays({
+  width,
+  height,
+  timestamp,
+  address,
+  maxAddressLines = 5,
+  theme = {},
+  regularFontFile,
+  semiboldFontFile,
+}) {
+  const finalTheme = { ...DEFAULT_THEME, ...theme };
+  const { outerPad, lineGap } = finalTheme;
+  const fonts = calculateFontSizes(width);
+  const maxWidth = width * 0.70;
+  const textWidth = Math.round(maxWidth);
+  const rightX = width - outerPad;
+  const left = Math.max(0, Math.round(rightX - maxWidth));
+
+  let addressLines = wrapTextByWords(
+    (address || "Lokasi tidak tersedia").toString(),
+    {
+      maxWidthPx: maxWidth,
+      fontSize: fonts.address,
+      avgFactor: 0.58,
+      preferComma: true,
+    }
+  );
+
+  addressLines = clampLinesWithEllipsis(addressLines, {
+    maxLines: maxAddressLines,
+    maxWidthPx: maxWidth,
+    fontSize: fonts.address,
+    avgFactor: 0.58,
+  });
+
+  const addressLineHeight = fonts.address + lineGap;
+  const totalAddressHeight = addressLines.length * addressLineHeight;
+  const addressStartY = height - outerPad;
+  const timestampY = addressStartY - totalAddressHeight - (lineGap * 2);
+  const timestampParts = timestamp.split(" ");
+  const timestampText = `${timestampParts.slice(0, 3).join(" ")} | ${timestampParts.slice(3).join(" ")}`;
+  const overlays = [];
+
+  const makeTextOverlay = ({ text, top, fontSize, fontfile }) => ({
+    input: {
+      text: {
+        text: escapeXml(text),
+        font: `Inter ${fontSize}`,
+        fontfile,
+        width: textWidth,
+        align: "right",
+        rgba: true,
+      },
+    },
+    left,
+    top: Math.max(0, Math.round(top)),
+  });
+
+  overlays.push(
+    makeTextOverlay({
+      text: timestampText,
+      top: timestampY - fonts.time,
+      fontSize: fonts.time,
+      fontfile: semiboldFontFile || regularFontFile,
+    })
+  );
+
+  addressLines.forEach((line, index) => {
+    const lineY = addressStartY - totalAddressHeight + addressLineHeight + (index * addressLineHeight);
+    overlays.push(
+      makeTextOverlay({
+        text: line,
+        top: lineY - fonts.address,
+        fontSize: fonts.address,
+        fontfile: regularFontFile || semiboldFontFile,
+      })
+    );
+  });
+
+  return overlays;
 }
 
 // ===================== IMAGE SERVICE CLASS =====================
@@ -532,10 +632,15 @@ class ImageService {
       // Load embedded fonts if configured (for Vercel/cloud deployments)
       let fontFaceCSS = "";
       let fontFamilyName = null;
+      let regularFontFile = null;
+      let semiboldFontFile = null;
       const cfgRegular = config.watermark.fontRegular;
       const cfgSemibold = config.watermark.fontSemibold;
 
       if (cfgRegular || cfgSemibold) {
+        regularFontFile = await resolveFontFilePath(cfgRegular);
+        semiboldFontFile = await resolveFontFilePath(cfgSemibold);
+
         const regularData = await loadFontDataUrl(cfgRegular);
         const semiboldData = await loadFontDataUrl(cfgSemibold);
 
@@ -565,11 +670,28 @@ class ImageService {
         theme: themeOverrides,
         fontFaceCSS,
         fontFamilyName,
+        renderText: !(regularFontFile || semiboldFontFile),
       });
+
+      const textOverlays = regularFontFile || semiboldFontFile
+        ? buildSharpTextOverlays({
+            width,
+            height,
+            timestamp,
+            address,
+            maxAddressLines: Number.isInteger(opts.maxAddressLines)
+              ? opts.maxAddressLines
+              : 5,
+            theme: themeOverrides,
+            regularFontFile,
+            semiboldFontFile,
+          })
+        : [];
 
       // Composite watermark onto image
       let pipeline = image.composite([
         { input: Buffer.from(svg), top: 0, left: 0 },
+        ...textOverlays,
       ]);
 
       // Preserve output format with high quality
