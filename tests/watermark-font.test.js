@@ -51,11 +51,11 @@ describe("watermark font rendering", () => {
     const overlays = mockImage.composite.mock.calls[0][0];
     const textOverlays = overlays.filter((overlay) => overlay.input.text);
 
-    expect(textOverlays.length).toBeGreaterThanOrEqual(4);
+    expect(textOverlays).toHaveLength(10);
     expect(textOverlays[0].input.text.text).toContain("foreground=\"#000000\"");
-    expect(textOverlays[8].input.text.text).toContain("foreground=\"#FFFFFF\"");
-    expect(textOverlays[8].input.text.align).toBe("left");
-    expect(textOverlays[8].left).toBeLessThanOrEqual(40);
-    expect(textOverlays[8].top).toBeGreaterThanOrEqual(600);
+    expect(textOverlays[4].input.text.text).toContain("foreground=\"#FFFFFF\"");
+    expect(textOverlays[4].input.text.align).toBe("left");
+    expect(textOverlays[4].left).toBeLessThanOrEqual(40);
+    expect(textOverlays[4].top).toBeGreaterThanOrEqual(600);
   });
 });

@@ -33,4 +33,8 @@ describe("server startup", () => {
       ])
     );
   });
+
+  it("deploys Vercel functions near Indonesian users", () => {
+    expect(vercelConfig.regions).toEqual(["sin1"]);
+  });
 });

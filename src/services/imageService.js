@@ -457,14 +457,10 @@ function buildSharpTextOverlays({
   const addVisibleText = ({ text, top, fontSize, fontfile }) => {
     const strokeWidth = Math.max(2, Math.round(fontSize * 0.10));
     const strokeOffsets = [
-      [-strokeWidth, -strokeWidth],
       [0, -strokeWidth],
-      [strokeWidth, -strokeWidth],
       [-strokeWidth, 0],
       [strokeWidth, 0],
-      [-strokeWidth, strokeWidth],
       [0, strokeWidth],
-      [strokeWidth, strokeWidth],
     ];
 
     strokeOffsets.forEach(([offsetX, offsetY]) => {
